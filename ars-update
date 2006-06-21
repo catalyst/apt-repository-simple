@@ -1,0 +1,487 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Scriptalicious;
+#use YAML qw(LoadFile DumpFile Dump);
+use Storable qw(nstore store retrieve);
+use File::Find qw(find);
+use Set::Object qw(set);
+use List::Util qw(max);
+use Digest::SHA1;
+use Digest::MD5;
+use Date::Manip qw(UnixDate);
+use IO::Handle;
+use YAML::Syck qw(Dump);
+
+my @z = qw(gz bz2);
+my %z_progs = (gz => [qw(gzip -9)],
+	       bz2 => [qw(bzip2)] );
+
+# hmm.  This should really be configable.  FIXME.
+my %suites = (qw(woody oldstable
+		 sarge stable
+		 sid   unstable
+		));
+
+my $force_regen;
+my $force_rescan;
+my $path;
+
+# these are actually per-repository, but nobody uses them anyway.
+# perhaps what we could do is actually read them in from the old
+# versions on-disk, so that changes persist.
+my $def_origin = "ars-unconfigured";
+my $def_label = "Unconfigured ARS";
+my $def_desc = "An unconfigured apt-repository-simple";
+my $origin;
+my $label;
+my $desc;
+my $no_sign;
+
+getopt getconf( "force-regen|f" => \$force_regen,
+		"force-rescan|F" => \$force_rescan,
+		"path|p=s" => \$path,
+		"origin|o=s" => \$origin,
+		"label|l=s" => \$label,
+		"desc|D=s" => \$desc,
+		"no-sign|S" => \$no_sign,
+	      );
+
+if ( $path ) {
+    chdir($path) or barf "failed to change to $path; $!";
+}
+
+my @dirs = <pool/*>;
+
+my @indep_dirs;
+my %dists;
+my %dist_dirs;
+
+for my $dir (@dirs) {
+
+    say "processing $dir";
+    my ($pool) = ($dir =~ m{.*/(.*)});
+
+    if (my ($dist, $arch) = ($pool =~ m{(.*)-(.*)})) {
+	push @{ $dists{$dist}||=[] }, $dir
+	    if $arch eq "all";
+	push @{ $dist_dirs{$dist}{$arch} ||= [] }, $dir
+	    unless $arch eq "all";
+    } else {
+	push @indep_dirs, $dir;
+    }
+
+    my $statefile = "$dir/packages.pm3";
+    my %pkgs;
+
+    my $dirty = 0;
+    if ( -e $statefile) {
+	%pkgs = %{ retrieve $statefile };
+	while (my ($k, $v) = each %pkgs) {
+ 	    unless ( -e $v->{filename} ) {
+	        delete $pkgs{$k};
+		$dirty = 1;
+	    }
+	}
+    }
+
+    find(sub {
+	return if m{^(\.\.?|.*\.(yml|pm3|changes|tar.gz|dsc|diff.gz|groups))$};
+	(my $rel_filename = $File::Find::name) =~ s{^\./*}{};
+	if ( -f ) {
+	    my ($pkg, $vers, $arch) = m{(.*)_(.*)_(.*).deb}
+	        or do {
+	        moan "file $rel_filename doesn't match debian form!";
+		return;
+	    };
+	    if ($pkgs{$pkg}) {
+		# ignore epoch for now
+		if ( $pkgs{$pkg}{version} lt $vers
+		     or ( $pkgs{$pkg}{version} eq $vers
+ 			  and $pkgs{$pkg}{mtime} != ((stat _)[9]))) {
+		    whisper "updating $pkg from $pkgs{$pkg}{version} to $vers";
+		    delete $pkgs{$pkg};
+		}
+	    }
+	    if (!$pkgs{$pkg} or $force_rescan) {
+		$dirty++;
+		mutter "adding $pkg from $rel_filename";
+		my $md5sum = `md5sum $_`;
+		($md5sum) = ($md5sum =~ m{^(\w+)});
+		my $filename = $_;
+		my @groups;
+		#stat $rel_filename;
+		my $mtime = ((stat _)[9]);
+		my $size = ((stat _)[7]);
+		if ( -f "$filename.groups" ) {
+		    @groups = map { chomp; $_ } `cat $filename.groups`;
+		    if ( !@groups ) {
+			unlink "$filename.groups";
+		    }
+		}
+		$pkgs{$pkg} =
+		    {
+		     filename => $rel_filename,
+		     version => $vers,
+		     mtime => $mtime,
+		     size => $size,
+		     md5sum => $md5sum,
+		     info => grok_dpkg_info($filename),
+		     md5sums => get_md5sums($filename),
+		     groups => set(@groups),
+		    };
+	    }
+        };
+    }, $dir);
+
+    if ($dirty) {
+        store reverse($statefile, \%pkgs)
+    }
+    mutter("$dir: $dirty package(s) updated");
+}
+
+
+for my $dist ( (set(keys %dists) + set(keys %dist_dirs))->members ) {
+
+    my $release = eval { retrieve 'dists/$dist/Release.pm3' } || [];
+    my $dirty;
+    my %done_contents;
+
+    my %sums;
+    my $files = set();
+
+    for my $arch ( keys %{ $dist_dirs{$dist} } ) {
+
+	# FIXME - write proper Sources files
+	next if $arch eq 'sources';
+
+	my @files = grep { -e }
+	    map { "$_/packages.pm3" }
+		@{ $dist_dirs{$dist}{$arch} },
+		    @{ $dists{$dist} },
+			@indep_dirs;
+
+	say("preparing Contents files for $dist-$arch");
+	my @dirs = map { retrieve $_ } @files;
+
+	my %pkgs;
+	open CONTENTS, "| gzip > dists/$dist/Contents-$arch.gz";
+	print CONTENTS "Install the apt-file package to automatically search this file.
+FILE LOCATION\n";
+
+	for my $dir (@dirs) {
+	    while (my ($pkg, $info) = each %$dir) {
+		if ($pkgs{$pkg}) {
+		    moan "package $pkg appears more than once in dirs for $dist-$arch";
+		} else {
+		    $pkgs{$pkg} = $info;
+		    my $md5sums = $info->{md5sums};
+		    my @groups = ($info->{groups}||set())->members;
+		    my ($primary_group) = ( (sort @groups), "all");
+		    for (my $i = 0; $i < $#$md5sums; $i+=2) {
+			print CONTENTS $md5sums->[$i], " ", "$primary_group/$pkg", "\n";
+		    }
+		}
+	    }
+	}
+	close CONTENTS;
+
+#---
+	my $all_groups = set(map { ($_->{groups}||set())->members
+			       } values %pkgs );
+	say "All groups : $all_groups";
+
+	for my $group ( "all", $all_groups->members ) {
+
+	    my $dir = "dists/$dist/$group/binary-$arch";
+
+	    ( -e $dir ) || run("mkdir", "-p", $dir);
+
+	    open RELEASE, ">$dir/Release.new"
+		or barf "open($dir/Release.new) failed; $!";
+
+	    my ($conf_origin, $conf_label) = @{{
+		map { chomp; split ": ", $_, 2 }
+		    grep { m{^\w+: } }
+			`cat $dir/Release`
+	    }}{qw(Origin Label)}
+		if ( -e "$dir/Release" );
+
+	    my $release_data = join "", map { $_, "\n" }
+		"Archive: $dist",
+     		"Component: $group",
+     		"Origin: ${\( $origin || $conf_origin || $def_origin )}",
+     		"Label: ${\( $label || $conf_label || $def_label )}",
+     		"Architecture: $arch";
+	    print RELEASE $release_data;
+	    close RELEASE;
+	    {
+		my $md5 = Digest::MD5->new();
+		my $sha1 = Digest::SHA1->new();
+		$md5->add($release_data);
+		$sha1->add($release_data);
+		my $length = length $release_data;
+		push @$release,
+		    (
+		     (join(":","MD5Sum",$md5->hexdigest,
+			   $length,"$dir/Release").      "\n"),
+		     (join(":","SHA1",$sha1->hexdigest,
+			   $length,"$dir/Release").      "\n")
+		    );
+	    }
+
+	    my $Packages = "$dir/Packages";
+
+	    my $max = (max map { ((stat $_)[9]) } @files) ;
+	    if ( $max < ((stat $Packages)[9]||0) and !$force_regen ) {
+		say "no new packages in $dist-$arch ($group)";
+		next;
+	    }
+
+	    # for getting back MD5 and SHA1 sums
+	    pipe(PARENT_RDR, CHILD_WTR);
+
+	    if (my $pid = open PACKAGES, "|-") {
+		if (my $pid2 = fork()) {
+		    close PACKAGES;
+		    close CHILD_WTR;
+		    # this process collects SHA1 and MD5 sums and filesizes
+		    while (<PARENT_RDR>) {
+			push @$release, $_;
+		    }
+		    close PARENT_RDR;
+		} elsif (!defined $pid2) {
+		    die "fork failed; $!";
+		} else {
+		    # this process writes the Packages contents
+		    my $n;
+		    my $md5 = Digest::MD5->new();
+		    my $sha1 = Digest::SHA1->new();
+		    my $length = 0;
+		    open REALPACKAGES, ">$Packages.new" or barf("open($Packages.new) failed; $!");
+		    for my $pkg (sort keys %pkgs) {
+			next unless $group eq "all" or
+			    ($pkgs{$pkg}{groups} and
+			     $pkgs{$pkg}{groups}->includes($group));
+			print PACKAGES map {
+			    defined($_) or warn "bah";
+			    $md5->add($_);
+			    $sha1->add($_);
+			    $length += length($_);
+			    print REALPACKAGES $_;
+			    $_
+			} ($n++ ? "\n" : ""), display($pkgs{$pkg});
+		    }
+		    close REALPACKAGES;
+		    close PACKAGES;
+		    print CHILD_WTR
+			join("", (join(":","MD5Sum",$md5->hexdigest,$length,"$Packages"), "\n",
+				  join(":","SHA1",$sha1->hexdigest,$length,"$Packages"), "\n"));
+		    exit(0);
+		}
+	    } elsif (!defined $pid) {
+		die "fork failed; $!";
+	    } else {
+
+		# child - sees Packages content on STDIN.
+		# This process does a "tee", as well as summing the
+		# Packages file.
+		my $md5 = Digest::MD5->new();
+		my $sha1 = Digest::SHA1->new();
+		my $length = 0;
+		my %fh;
+		for my $z (@z) {
+		    if (my $z_pid = open $fh{$z}, "|-") {
+			# parent... just continue
+		    } elsif (!defined $z_pid) {
+			die "fork failed; $!";
+		    } else {
+			if (my $z_sum_pid = open STDOUT, "|-") {
+			    exec(@{$z_progs{$z}}) or exit(1);
+			} else {
+			    open STDOUT, ">$Packages.$z.new" or barf $!;
+			    while (<STDIN>) {
+				$length += length $_;
+				$md5->add($_);
+				$sha1->add($_);
+				print $_;
+			    }
+			    print CHILD_WTR
+				join("", (join(":","MD5Sum",$md5->hexdigest,$length,"$Packages.$z"), "\n",
+					  join(":","SHA1",$sha1->hexdigest,$length,"$Packages.$z"), "\n"));
+			    exit(0);
+			}
+		    }
+		}
+		while (<STDIN>) {
+		    $length += length $_;
+		    $md5->add($_);
+		    $sha1->add($_);
+		    for my $i (@z) { print { $fh{$i} } $_ };
+		} 
+		print CHILD_WTR join(":","MD5Sum",$md5->hexdigest,$length,$Packages)."\n";
+		exit(0);
+	    }
+	    # just like that!  :)
+	}
+
+	say "preparing Release file for $dist";
+	nstore $release, "dists/$dist/Release.pm3";
+
+	my ($conf_origin, $conf_label, $conf_desc) = @{{
+	    map { chomp; split ": ", $_, 2 }
+		grep { m{^\w+: } }
+		    `cat dists/$dist/Release`
+		}}{qw(Origin Label Description)}
+		    if ( -e "dists/$dist/Release" );
+
+	open RELEASE, ">dists/$dist/Release.new" or barf "open(dists/$dist/Release) failed; $!";
+	print RELEASE "Origin: ${\( $origin || $conf_origin || $def_origin )}
+Label: ${\( $label || $conf_label || $def_label )}
+Suite: ${\( $suites{$dist} || $dist )}
+Codename: $dist
+Date: ".UnixDate("now", "%g")."
+Architectures: ".join(" ",( grep { $_ ne "sources" }
+			    keys %{ $dist_dirs{$dist} } ))."
+Components: all @{[ sort $all_groups->members ]}
+Description: ${\( $desc || $conf_desc || $def_desc )}
+";
+	for my $line (@$release) {
+	    my ($type, $digest, $length, $filename) = split ":", $line;
+	    chomp($filename);
+	    $sums{$type}{$filename} = [ $digest, $length ];
+	    $files->insert($filename);
+	}
+    }
+    for my $type (qw(MD5Sum SHA1)) {
+	print RELEASE "$type:\n";
+	for my $filename (sort keys %{ $sums{$type} }) {
+	    my ($digest, $length) = @{ $sums{$type}{$filename} };
+	    $filename =~ s{dists/$dist/}{};
+	    printf RELEASE " %s %16d %s\n", $digest, $length, $filename;
+	}
+    }
+    close RELEASE;
+    unless ( $no_sign ) {
+	if (system("gpg", "--use-agent", "-b", "-a", "dists/$dist/Release.new") == 0) {
+	    rename("dists/$dist/Release.new.asc", "dists/$dist/Release.gpg.new");
+	    $files->insert("dists/$dist/Release.gpg");
+	} else {
+	    moan("gpg sign failed; rc=$?");
+	}
+    }
+    for my $file ($files->members, "dists/$dist/Release") {
+	rename("$file.new", $file) or barf("rename($file.new, $file) failed; $!");
+    }
+}
+
+sub display {
+    my $info = shift;
+    my $dpkg_info = $info->{info};
+    my @rv;
+    for (my $i = 0; ($i * 2)+2 < @$dpkg_info; $i++) {
+	push @rv, $dpkg_info->[($i*2)], ": ", $dpkg_info->[($i*2)+1], "\n";
+    }
+
+    push @rv, "Filename: ", $info->{filename}, "\n";
+    push @rv, "Size: ", $info->{size}, "\n";
+    push @rv, "MD5sum: ", $info->{md5sum}, "\n";
+
+    push @rv, $dpkg_info->[$#$dpkg_info-1], ": ",
+	$dpkg_info->[$#$dpkg_info],"\n";
+
+    if ( grep { !defined } @rv ) {
+	moan "display for $info->{filename} returns: ";
+	say Dump \@rv;
+	say "info is:";
+	say Dump $info;
+    }
+
+    return @rv;
+}
+
+sub grok_dpkg_info {
+    my $filename = shift;
+
+    my $data = capture(qw(dpkg -I), $filename);
+
+    scalar($data =~ m{\A.*^ Package: (\S+)\n}msg);
+    my @data = ( "Package" => $1 );
+    while ($data =~ m{\G (\S+): ((?-s:.*(\n  .*)*))\n}sg) {
+        my ($what, $value) = ($1, $2);
+	$value =~ s{^ }{}mg;
+	chomp($value);
+	push @data, $what => $value;
+    }
+    return \@data;
+}
+
+sub get_md5sums {
+    my $filename = shift;
+    my ($err, @data) = capture_err(qw(dpkg -I), $filename, "md5sums");
+    return undef if $err;
+    my @sums = map { chomp; m/(\S+)\s*(.*)/ && ($2 => $1) } @data;
+    return \@sums;
+}
+
+__END__
+
+=head1 NAME
+
+update-Packages - update multiple Packages files
+
+=head1 SYNOPSIS
+
+ update-Packages [options]
+
+=head1 DESCRIPTION
+
+This script scans a pool of directories (in F<pool/>), which are
+assumed to be in the form I<dist>-I<arch> (where I<arch> may be
+C<all>, or a real arch like C<i386> or C<amd64>).
+
+This script works a bit like C<dpkg-scanpackages>, its principle
+difference being that it caches information between runs.  This makes
+it orders of magnitude faster for many common cases.
+
+=head1 COMMAND LINE OPTIONS
+
+=over
+
+=item B<-h, --help>
+
+Display a program usage screen and exit.
+
+=item B<-V, --version>
+
+Display program version and exit.
+
+=item B<-v, --verbose>
+
+Verbose command execution, displaying things like the
+commands run, their output, etc.
+
+=item B<-q, --quiet>
+
+Suppress all normal program output; only display errors and
+warnings.
+
+=item B<-d, --debug>
+
+Display output to help someone debug this script, not the
+process going on.
+
+=back
+
+=head1 SEE ALSO
+
+L<dpkg-scanpackages>, L<dpkg-deb>, L<apt>
+
+=head1 AUTHOR
+
+Sam Vilain, <samv@cpan.org>
+
+Sponsored by Catalyst IT Ltd, L<http://www.catalyst.net.nz/>
+
+=cut
+

@@ -1,0 +1,101 @@
+#!/usr/bin/perl
+
+use Scriptalicious;
+use Set::Object qw(set);
+use Cwd qw(getcwd);
+
+my $host;
+my $path = "/var/www/debian";
+my $release;
+my @groups;
+my $sign;
+
+getopt getconf("host|h=s" => \$host,
+	       "path|p=s" => \$path,
+	       "release|r=s" => \$release,
+	       "group|g=s@" => \@groups,
+	       "sign|s" => \$sign,
+	      );
+
+$release or abort "need a release to add to";
+
+( -d $path ) or abort "target path $path does not exist!";
+
+my $ok_types = set(qw( orig.tar.gz tar.gz dsc diff.gz changes deb ));
+
+my %files;
+while (my $filename = shift) {
+    moan("no such file $filename"), next unless -e $filename;
+
+    (my $basename = $filename) =~ s{.*/}{};
+
+    my ($package, $version, $arch, $type)
+        = $basename =~ m{^([^_]*)_([^_]*)(?:_([^\.]*))?\.(.*)}
+            or (moan("filename $filename doesn't look right"), next);
+
+    $ok_types->includes($type) or
+       (moan("bad extension '$type' on $filename"), next);
+
+    if ($type eq "deb") {
+        $files{"pool/$release-$arch/$basename"} = $filename;
+    }
+    else {
+        $files{"pool/$release-sources/$basename"} = $filename;
+    }
+}
+
+abort "no file(s) to copy" unless keys %files;
+
+my $target = ($host
+              ? ($ENV{TMP} || "/tmp") . "/ars.$$"
+              : $path);
+
+while (my ($poolpath, $filename) = each %files) {
+
+    $filename =~ m{^/} || ($filename = getcwd . "/" . $filename);
+
+    (my $dirname = $poolpath) =~ s{/[^/]*$}{};
+
+    ( -d "$target/$dirname" )
+        || run("mkdir", "-p", "$target/$dirname");
+
+    if ( !$host ) {
+        if ( -e "$target/$poolpath" ) {
+            moan("$poolpath already in $target; overwriting - new "
+                ."package may not be propagated fully");
+            unlink("$target/$poolpath");
+        }
+
+        run("cp", $filename, "$target/$poolpath");
+
+    } else {
+        # FIXME - we're not able to give the above warning.
+
+        symlink($filename, "$target/$poolpath")
+            or barf "symlink($filename, $target/$poolpath) failed; $!";
+    }
+
+    open(GROUPS, ">$target/$poolpath.groups")
+	or barf "opening $target/$poolpath.groups for writing: $!";
+    print GROUPS "$_\n" for @groups;
+    close GROUPS;
+
+}
+chdir($target) || barf("chdir($target) failed; $!");
+
+if ( $host ) {
+    run( -in => sub { exec("tar chf - .") },
+         "ssh", $host, "cd $path && tar xvvf -" );
+
+    run(qw(xterm -hold -e ssh -tv), $host,
+        "cd $path && ars-update");
+
+    chdir("..");
+    run("rm", "-rf", $target);
+}
+else {
+    run("ars-update", ("-v") x $VERBOSE,
+	($sign ? () : ("-S")),
+       );
+    say("ars-update successful");
+}

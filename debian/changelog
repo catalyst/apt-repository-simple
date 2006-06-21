@@ -1,0 +1,12 @@
+apt-repository-simple (0.02) unstable; urgency=low
+
+  * Add 'ars-add' script and make 'ars-update' support package groups
+
+ -- Sam Vilain <samv@catalyst.net.nz>  Wed, 21 Jun 2006 16:01:22 +1200
+
+apt-repository-simple (0.01) unstable; urgency=low
+
+  * Initial package.
+
+ -- Sam Vilain <samv@catalyst.net.nz>  Tue, 20 Jun 2006 18:04:52 +1200
+
