@@ -1,3 +1,9 @@
+apt-repository-simple (0.02-1) unstable; urgency=low
+
+  * Add missing dependency on YAML::Syck to debian control
+
+ -- Sam Vilain <sam@vilain.net>  Thu, 29 Jun 2006 18:24:52 +1200
+
 apt-repository-simple (0.02) unstable; urgency=low
 
   * Add 'ars-add' script and make 'ars-update' support package groups
