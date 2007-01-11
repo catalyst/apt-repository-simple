@@ -1,3 +1,10 @@
+apt-repository-simple (0.03) unstable; urgency=low
+
+  * Use nstore, not store, so repositories may be cross-mounted
+    between arches
+
+ -- Sam Vilain <sam@vilain.net>  Fri, 18 Aug 2006 12:23:37 +1200
+
 apt-repository-simple (0.02-1) unstable; urgency=low
 
   * Add missing dependency on YAML::Syck to debian control

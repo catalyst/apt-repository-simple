@@ -3,7 +3,7 @@
 use strict;
 use Scriptalicious;
 #use YAML qw(LoadFile DumpFile Dump);
-use Storable qw(nstore store retrieve);
+use Storable qw(nstore retrieve);
 use File::Find qw(find);
 use Set::Object qw(set);
 use List::Util qw(max);
@@ -135,7 +135,7 @@ for my $dir (@dirs) {
     }, $dir);
 
     if ($dirty) {
-        store reverse($statefile, \%pkgs)
+        nstore reverse($statefile, \%pkgs)
     }
     mutter("$dir: $dirty package(s) updated");
 }
