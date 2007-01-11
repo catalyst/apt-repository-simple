@@ -428,11 +428,11 @@ __END__
 
 =head1 NAME
 
-update-Packages - update multiple Packages files
+ars-update - update Packages files in simple apt repositories
 
 =head1 SYNOPSIS
 
- update-Packages [options]
+ ars-update [options]
 
 =head1 DESCRIPTION
 
@@ -447,6 +447,41 @@ it orders of magnitude faster for many common cases.
 =head1 COMMAND LINE OPTIONS
 
 =over
+
+=item B<-f, --force-regen>
+
+Force all Packages lists to be regenerated, not just the ones that
+changed.
+
+=item B<-F, --force-rescan>
+
+Force all packages to be checksummed and scanned, not just the ones
+whose filestamps changed.
+
+=item B<-p, --path=PATH>
+
+Specify a directory other than the working directory that the APT
+repository is rooted.
+
+=item B<-o, --origin=ORIGIN>
+
+Specify the APT Origin.  Used to pin packages with
+/etc/apt/preferences, etc.
+
+=item B<-l, --label=LABEL>
+
+Specify the APT Label.  Similar use to Origin.
+
+=item B<-D, --desc="Description">
+
+An optional description of the archive.
+
+=item B<-S, --no-sign>
+
+Don't try to generate F<.asc> files for the F<Packages> and F<Release>
+files.  These files allow packages to be installed without warning the
+user about them being unsigned - but only if the user also has the key
+used for signing in their APT keyring.  See L<apt-key>.
 
 =item B<-h, --help>
 
