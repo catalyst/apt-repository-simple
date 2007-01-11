@@ -64,7 +64,7 @@ my @indep_dirs;
 my %dists;
 my %dist_dirs;
 
-my @superceded;
+my $superceded = set();
 
 for my $dir (@dirs) {
 
@@ -121,11 +121,11 @@ for my $dir (@dirs) {
 			    ) )
 			or ( ! -e "$path/$pkgs{$pkg}{filename}" )
 		      ) {
-		    push @superceded, $pkgs{$pkg}{filename};
+		    $superceded->insert($pkgs{$pkg}{filename});
 		    whisper "scanning $pkg";
 		    delete $pkgs{$pkg};
 		} else {
-		    push @superceded, $rel_filename;
+		    $superceded->insert($rel_filename);
 		}
 	    }
 	    if (!$pkgs{$pkg} or $force_rescan) {
@@ -404,12 +404,12 @@ Description: ${\( $desc || $conf_desc || $def_desc )}
     }
 }
 
-if ( $clean_old and @superceded ) {
+if ( $clean_old and $superceded->size ) {
     say "deleting superceded files:";
-    for ( @superceded ) {
+    for ( sort @$superceded ) {
 	print "    $_\n";
     }
-    unlink(@superceded);
+    unlink(@$superceded);
 }
 
 exit 0;
