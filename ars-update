@@ -87,6 +87,15 @@ for my $dir (@dirs) {
     if ( -e $statefile) {
 	%pkgs = %{ retrieve $statefile };
 	while (my ($k, $v) = each %pkgs) {
+	    # spot a renamed pool and fix the data up.
+	    my ($old_pool) = $v->{filename} =~ m{^pool/([^/]*)};
+	    if ( $old_pool ne $pool ) {
+		whisper "detected pool change in $v->{filename}";
+		$v->{filename} =~
+		    s{^pool/\Q$old_pool\E}{pool/$pool};
+		$dirty = 1;
+	    }
+
  	    unless ( -e $v->{filename} ) {
 	        delete $pkgs{$k};
 		$dirty = 1;
