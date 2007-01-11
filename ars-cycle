@@ -1,0 +1,265 @@
+#!/usr/bin/perl
+
+use Scriptalicious;
+use Set::Object qw(set);
+use Cwd qw(getcwd);
+
+my $path = "/var/www/debian";
+my @releases;
+my $sign;
+my $delete_last;
+
+getopt getconf("path|p=s" => \$path,
+	       "release|r=s@" => \@releases,
+	       "sign|s" => \$sign,
+	       "delete|D" => \$delete_last,
+	      );
+
+@releases > 1 or abort "need at least two releases to cycle";
+
+( -d $path ) or abort "repository path $path does not exist!";
+
+say("You specified your upgrade cycle is (newest to oldest):\n\n",
+    join(" => ", @releases), "\n",
+    "\nSo, now you're going to turn this wheel one notch.\n\n",
+    "First, let's check that this seems reasonable.\n");
+
+my $newest = $releases[0];
+my @files = files_in_pool($path, $newest, 1);
+
+barf "no packages in $path/pool/$newest-*" unless @files;
+
+say("Ok, well we found some .debs in the *newest* pool:\n",
+    show_a_few(@files));
+
+if ( not prompt_yN("these are ready to become $releases[1]?") ) {
+    say "well, good thing I asked, hey?";
+    exit(1);
+}
+
+say("Ok, so then there's the small matter of what happens to the "
+    ."oldest pool.");
+
+@files = files_in_pool($path, $releases[-1], 0);
+
+if ( @files ) {
+    say("there are ".@files." file(s) in the pool $releases[-1]:\n",
+	show_a_few(@files));
+    if ( $delete_last ) {
+	say "you specified on the command line that you want to "
+	    ."delete them.";
+    o_really:
+	unless ( prompt_yN( "but do you *really* want to delete them?" )
+	       ) {
+	    $delete_last = 0;
+	}
+    }
+
+    if ( !$delete_last ) {
+	say("we're going to have to do something with them.\n",
+	    "Look, why not make up a release name and then we'll just\n",
+	    "rename them to that and be done with it.");
+
+	if ( prompt_Yn("Sweet?") ) {
+
+	    my $last_dist = prompt_string("Ok, so gimme a name for it:");
+
+	    while ( $last_dist and
+		    (my @x = glob "$path/pool/$last_dist-*") ) {
+		say("look, you can't choose that, these already exist;\n",
+		    (map { "    $_\n" } @x),
+		    "and that would be bad form.  try again.");
+		$last_dist = prompt_string("give me a name:");
+	    }
+
+	    if ( !$last_dist ) {
+		say "ok, I'm taking my toys home now.  see-ya.";
+		exit(1);
+	    }
+
+	    say "ok, $last_dist it is.";
+	    push @releases, $last_dist;
+
+	} else {
+	    if ( prompt_yN("Want to just delete them, then?") ) {
+		$delete_last = 1;
+		say "ok, so you reckon you want to delete them.";
+		goto o_really;
+	    } else {
+		say "make up your mind.";
+		exit(1);
+	    }
+	}
+    }
+}
+
+say "right-o, let's get on with it, then.";
+
+my $pattern = "(" . join("|", map { "\Q$_\E" } @releases) . ")";
+
+opendir DIR, "$path/pool" or barf "opendir($path) failed; $!";
+my @ents = grep m{^$pattern-\w+}, readdir DIR;
+closedir DIR;
+
+my $oldest = pop @releases;
+
+my @toast_dirs = grep m{^\Q$oldest\E-}, @ents;
+
+if ( @toast_dirs ) {
+    my $empty = "";
+    if ( !$delete_last ) {
+	barf "famous program last words #4: 'this should never happen'"
+	    if files_in_pool($path, $oldest);
+	$empty = "(empty) ";
+    }
+    for my $dir ( @toast_dirs ) {
+	say "DELETING $empty$path/pool/$dir";
+	run("rm", "-rf", "$path/pool/$dir");
+    }
+}
+
+while ( my $next_oldest = pop @releases ) {
+
+    my @to_rename = grep m{^\Q$next_oldest\E-}, @ents;
+
+    say "now renaming pool $next_oldest to $oldest";
+    for my $rename ( @to_rename ) {
+	(my $new_name = $rename) =~ s{^\Q$next_oldest\E-}{$oldest-}
+	    or barf;
+	rename("$path/pool/$rename", "$path/pool/$new_name")
+	    or barf ("in $path/pool: rename($rename => $new_name) ".
+		     "failed; $!");
+    }
+
+    $oldest = $next_oldest;
+}
+
+say "pools renamed, now let's hope that ars-update works to fix things up...";
+
+my @ars_update_cmd = ( "ars-update", "-f",
+		       "-p", $path,
+		       ("-v") x $VERBOSE,
+		       (      $sign ? ()          : ("-S") ),
+		     );
+
+if ( $sign ) {
+    system(@ars_update_cmd) == 0
+	or barf "ars-update failed; rc=$?";
+} else {
+    run(@ars_update_cmd);
+}
+
+say("ars-cycle successful");
+exit(0);
+
+sub files_in_pool {
+    my $path = shift;
+    my $pool = shift;
+    my $must_be_dirs = shift;
+
+    my @pool_dirs = glob "$path/pool/$pool-*";
+    if ( $must_be_dirs and not @pool_dirs ) {
+	abort "no pool dirs in $path/pool/$pool-*";
+    }
+
+    my @files;
+
+    if (@pool_dirs) {
+	@files = map { chomp; $_ }
+	    capture(find => @pool_dirs, -type => "f", -name => "*.deb");
+    }
+
+    @files;
+}
+
+sub show_a_few {
+    my @files = @_;
+    my $max = @files;
+    my $more_ind = ($max > 9);
+    $max = 9 if $more_ind;
+    return ( (map { "    $_\n" } @files[0..$max]),
+	     ($more_ind ? ("    +".(@files-9)." others\n") : ())
+	   );
+}
+
+__END__
+
+=head1 NAME
+
+ars-cycle - cycle pools along
+
+=head1 SYNOPSIS
+
+ ars-cycle [options] -r newest -r current -r old ...
+
+=head1 DESCRIPTION
+
+This command implements a similar system to Debian's "oldstable" /
+"stable" / "testing" / "unstable" cycles.  However, instead of
+changing symlinks that point to release names, the rather brute force
+approach is taken of simply moving pool directories, and potentially
+even deleting the 'oldest'.
+
+This script is highly interactive and shows everything that it's doing
+before it does it.  So, don't be afraid.
+
+=head1 COMMAND LINE OPTIONS
+
+=over
+
+=item B<-p, --path=PATH>
+
+Specify the directory of the simple APT repository.  Defaults to
+F</var/www/debian>.
+
+=item B<-r, --release=NAME>
+
+Specify a release name.  You need to specify all of the releases you
+want to cycle between, in order from newest to oldest.
+
+=item B<-D, --delete>
+
+Specify to delete the oldest pool that falls off the end.
+
+=item B<-s, --sign>
+
+Sign the C<Release> file at the end of it all, so that you don't have
+to get the message about installing software from untrusted archives.
+
+=item B<-h, --help>
+
+Display a program usage screen and exit.
+
+=item B<-V, --version>
+
+Display program version and exit.
+
+=item B<-v, --verbose>
+
+Verbose command execution, displaying things like the
+commands run, their output, etc.
+
+=item B<-q, --quiet>
+
+Suppress all normal program output; only display errors and
+warnings.
+
+=item B<-d, --debug>
+
+Display output to help someone debug this script, not the
+process going on.
+
+=back
+
+=head1 SEE ALSO
+
+L<dpkg-scanpackages>, L<dpkg-deb>, L<apt>
+
+=head1 AUTHOR
+
+Sam Vilain, <samv@cpan.org>
+
+Sponsored by Catalyst IT Ltd, L<http://www.catalyst.net.nz/>
+
+=cut
+
