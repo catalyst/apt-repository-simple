@@ -1,3 +1,13 @@
+apt-repository-simple (0.04) unstable; urgency=low
+
+  * enhance ars-update POD documentation
+  * Allow old packages to be cleaned, and time-based versioning
+  * add ars-add POD documenation
+  * assorted minor updates and bugfixes - see git history
+  * add ars-cycle
+
+ -- Sam Vilain <sam@vilain.net>  Thu, 11 Jan 2007 20:41:50 +1300
+
 apt-repository-simple (0.03) unstable; urgency=low
 
   * Use nstore, not store, so repositories may be cross-mounted
