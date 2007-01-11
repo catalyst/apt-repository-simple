@@ -12,6 +12,7 @@ use Digest::MD5;
 use Date::Manip qw(UnixDate);
 use IO::Handle;
 use YAML::Syck qw(Dump);
+use Cwd;
 
 my @z = qw(gz bz2);
 my %z_progs = (gz => [qw(gzip -9)],
@@ -37,6 +38,8 @@ my $origin;
 my $label;
 my $desc;
 my $no_sign;
+my $clean_old;
+my $times_not_versions;
 
 getopt getconf( "force-regen|f" => \$force_regen,
 		"force-rescan|F" => \$force_rescan,
@@ -44,6 +47,8 @@ getopt getconf( "force-regen|f" => \$force_regen,
 		"origin|o=s" => \$origin,
 		"label|l=s" => \$label,
 		"desc|D=s" => \$desc,
+		"clean|c" => \$clean_old,
+		"newer|n" => \$times_not_versions,
 		"no-sign|S" => \$no_sign,
 	      );
 
@@ -51,11 +56,15 @@ if ( $path ) {
     chdir($path) or barf "failed to change to $path; $!";
 }
 
+$path = cwd;
+
 my @dirs = <pool/*>;
 
 my @indep_dirs;
 my %dists;
 my %dist_dirs;
+
+my @superceded;
 
 for my $dir (@dirs) {
 
@@ -96,11 +105,27 @@ for my $dir (@dirs) {
 	    };
 	    if ($pkgs{$pkg}) {
 		# ignore epoch for now
-		if ( $pkgs{$pkg}{version} lt $vers
-		     or ( $pkgs{$pkg}{version} eq $vers
- 			  and $pkgs{$pkg}{mtime} != ((stat _)[9]))) {
-		    whisper "updating $pkg from $pkgs{$pkg}{version} to $vers";
+		if ( $rel_filename eq $pkgs{$pkg}{filename} ) {
+
+		    # force a rescan if the timestamp changes
+		    if ( (stat _)[9] != $pkgs{$pkg}{mtime} ) {
+			whisper "rescanning $pkg (mtime changed)";
+			delete $pkgs{$pkg};
+		    }
+		}
+		elsif ( ( $times_not_versions
+			  ? ( $pkgs{$pkg}{mtime} < ((stat _)[9]) )
+			  : ( $pkgs{$pkg}{version} lt $vers
+			      or ( $pkgs{$pkg}{version} eq $vers
+				   and $pkgs{$pkg}{mtime} != ((stat _)[9]))
+			    ) )
+			or ( ! -e "$path/$pkgs{$pkg}{filename}" )
+		      ) {
+		    push @superceded, $pkgs{$pkg}{filename};
+		    whisper "scanning $pkg";
 		    delete $pkgs{$pkg};
+		} else {
+		    push @superceded, $rel_filename;
 		}
 	    }
 	    if (!$pkgs{$pkg} or $force_rescan) {
@@ -375,6 +400,16 @@ Description: ${\( $desc || $conf_desc || $def_desc )}
     }
 }
 
+if ( $clean_old ) {
+    say "deleting superceded files:";
+    for ( @superceded ) {
+	print "    $_\n";
+    }
+    unlink(@superceded);
+}
+
+exit 0;
+
 sub display {
     my $info = shift;
     my $dpkg_info = $info->{info};
@@ -482,6 +517,15 @@ Don't try to generate F<.asc> files for the F<Packages> and F<Release>
 files.  These files allow packages to be installed without warning the
 user about them being unsigned - but only if the user also has the key
 used for signing in their APT keyring.  See L<apt-key>.
+
+=item B<-c, --clean>
+
+Delete all packages which have newer packages in the same pool dir.
+
+=item B<-n, --newer>
+
+When deciding if a package is older or newer than another one with the
+same name, use the timestamp, not the version number.
 
 =item B<-h, --help>
 
