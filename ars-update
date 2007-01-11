@@ -5,7 +5,7 @@ use Scriptalicious;
 #use YAML qw(LoadFile DumpFile Dump);
 use Storable qw(nstore retrieve);
 use File::Find qw(find);
-use Set::Object qw(set);
+use Set::Object 1.15, qw(set);
 use List::Util qw(max);
 use Digest::SHA1;
 use Digest::MD5;
@@ -190,6 +190,8 @@ for my $dist ( (set(keys %dists) + set(keys %dist_dirs))->members ) {
 	my @dirs = map { retrieve $_ } @files;
 
 	my %pkgs;
+	( -d "dists" ) || mkdir("dists");
+	( -d "dists/$dist" ) || mkdir("dists/$dist");
 	open CONTENTS, "| gzip > dists/$dist/Contents-$arch.gz";
 	print CONTENTS "Install the apt-file package to automatically search this file.
 FILE LOCATION\n";
@@ -388,11 +390,13 @@ Description: ${\( $desc || $conf_desc || $def_desc )}
     }
     close RELEASE;
     unless ( $no_sign ) {
-	if (system("gpg", "--use-agent", "-b", "-a", "dists/$dist/Release.new") == 0) {
+	unlink("dists/$dist/Release.new.asc");
+	system("gpg", "--use-agent", "-b", "-a", "dists/$dist/Release.new");
+	if ( ! -s "dists/$dist/Release.new.asc" ) {
+	    moan("gpg sign failed; rc=$?");
+	} else {
 	    rename("dists/$dist/Release.new.asc", "dists/$dist/Release.gpg.new");
 	    $files->insert("dists/$dist/Release.gpg");
-	} else {
-	    moan("gpg sign failed; rc=$?");
 	}
     }
     for my $file ($files->members, "dists/$dist/Release") {
@@ -400,7 +404,7 @@ Description: ${\( $desc || $conf_desc || $def_desc )}
     }
 }
 
-if ( $clean_old ) {
+if ( $clean_old and @superceded ) {
     say "deleting superceded files:";
     for ( @superceded ) {
 	print "    $_\n";
