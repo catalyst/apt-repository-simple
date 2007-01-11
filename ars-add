@@ -9,10 +9,14 @@ my $path = "/var/www/debian";
 my $release;
 my @groups;
 my $sign;
+my $send_clean;
+my $send_newer;
 
-getopt getconf("host|h=s" => \$host,
+getopt getconf("host|H=s" => \$host,
 	       "path|p=s" => \$path,
 	       "release|r=s" => \$release,
+	       "clean|c" => \$send_clean,
+	       "newer|n" => \$send_newer,
 	       "group|g=s@" => \@groups,
 	       "sign|s" => \$sign,
 	      );
@@ -75,27 +79,143 @@ while (my ($poolpath, $filename) = each %files) {
             or barf "symlink($filename, $target/$poolpath) failed; $!";
     }
 
-    open(GROUPS, ">$target/$poolpath.groups")
-	or barf "opening $target/$poolpath.groups for writing: $!";
-    print GROUPS "$_\n" for @groups;
-    close GROUPS;
-
+    if ( @groups ) {
+	open(GROUPS, ">$target/$poolpath.groups")
+	    or barf "opening $target/$poolpath.groups for writing: $!";
+	print GROUPS "$_\n" for @groups;
+	close GROUPS;
+    }
 }
 chdir($target) || barf("chdir($target) failed; $!");
 
-if ( $host ) {
-    run( -in => sub { exec("tar chf - .") },
-         "ssh", $host, "cd $path && tar xvvf -" );
+my @ars_update_cmd = ( "ars-update", ("-v") x $VERBOSE,
+		       ($send_clean ? ("--clean") : ()     ),
+		       ($send_newer ? ("--newer") : ()     ),
+		       (      $sign ? ()          : ("-S") ),
+		     );
 
-    run(qw(xterm -hold -e ssh -tv), $host,
-        "cd $path && ars-update");
+if ( $host ) {
+
+    run( -in => sub { exec("tar chf - .") },
+         "ssh", $host,
+	 "cd $path && tar xvvf -"
+	 . ( $sign ? "" : " && @ars_update_cmd" )
+       );
+
+    if ( $sign ) {
+	run(qw(xterm -hold -e ssh -tv), $host,
+	    "cd $path && ars-update");
+    }
 
     chdir("..");
+    die if not $target or $target eq "/";
     run("rm", "-rf", $target);
 }
 else {
-    run("ars-update", ("-v") x $VERBOSE,
-	($sign ? () : ("-S")),
-       );
-    say("ars-update successful");
+    if ( $sign ) {
+	system(@ars_update_cmd) == 0
+	    or barf "ars-update failed; rc=$?";
+    } else {
+	run(@ars_update_cmd);
+    }
 }
+
+say("ars-update successful");
+
+__END__
+
+=head1 NAME
+
+ars-add - add packages to simple apt repositories
+
+=head1 SYNOPSIS
+
+ ars-add [options] package.deb ...
+
+=head1 DESCRIPTION
+
+This script copies the passed package files into the specified (or
+configured) APT repository.
+
+=head1 COMMAND LINE OPTIONS
+
+=over
+
+=item B<-H, --host=HOSTNAME>
+
+Specify use of C<scp> to copy the files to C<HOSTNAME> before
+updating.  The command then spawns C<ars-update> on the remote end in
+an L<xterm> (so that you can interact with the signing process).
+
+=item B<-p, --path=PATH>
+
+Specify the directory of the simple APT repository.  Defaults to
+F</var/www/debian>.
+
+=item B<-r, --release=NAME>
+
+Specify the name of the release to add this package to.  This is
+B<required>.  You might choose to use names like C<sarge>,
+C<unstable>, etc - or your own, such as C<current>, C<next>, etc.
+
+=item B<-c, --clean>
+
+Pass the C<-c> option to C<ars-update> so that obvious cruft is
+automatically removed from pool directories.
+
+=item B<-n, --newer>
+
+Pass the C<-n> option to C<ars-update> so that the files that we are
+adding now end up in the generated packages list.
+
+=item B<-g, --group=GROUP>
+
+This option may be specified multiple times.  It specifies which
+groups to put this package into.  Eg, in the main debian archive this
+is names like C<main>, C<contrib>, etc, or in Ubuntu, it's C<main>,
+C<restricted>, C<universe>, etc.
+
+There is always an C<all> group which every package is added to.
+
+=item B<-s, --sign>
+
+Sign the C<Release> file at the end of it all, so that you don't have
+to get the message about installing software from untrusted archives.
+
+=item B<-h, --help>
+
+Display a program usage screen and exit.
+
+=item B<-V, --version>
+
+Display program version and exit.
+
+=item B<-v, --verbose>
+
+Verbose command execution, displaying things like the
+commands run, their output, etc.
+
+=item B<-q, --quiet>
+
+Suppress all normal program output; only display errors and
+warnings.
+
+=item B<-d, --debug>
+
+Display output to help someone debug this script, not the
+process going on.
+
+=back
+
+=head1 SEE ALSO
+
+L<dpkg-scanpackages>, L<dpkg-deb>, L<apt>
+
+=head1 AUTHOR
+
+Sam Vilain, <samv@cpan.org>
+
+Sponsored by Catalyst IT Ltd, L<http://www.catalyst.net.nz/>
+
+=cut
+
