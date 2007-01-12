@@ -66,7 +66,12 @@ my %dist_dirs;
 
 my $superceded = set();
 
+my ($DEB_HOST_ARCH) = (map { m{=(.*)} } grep /^DEB_HOST_ARCH=/,
+		       `dpkg-architecture`);
+
 for my $dir (@dirs) {
+
+    next unless -d $dir;
 
     say "processing $dir";
     my ($pool) = ($dir =~ m{.*/(.*)});
@@ -76,8 +81,11 @@ for my $dir (@dirs) {
 	    if $arch eq "all";
 	push @{ $dist_dirs{$dist}{$arch} ||= [] }, $dir
 	    unless $arch eq "all";
-    } else {
+    } elsif ( $pool =~ m{^(all|indep|any)$} ) {
 	push @indep_dirs, $dir;
+    } else {
+	mutter "ignoring directory $dir";
+	next;
     }
 
     my $statefile = "$dir/packages.pm3";
@@ -183,6 +191,12 @@ for my $dist ( (set(keys %dists) + set(keys %dist_dirs))->members ) {
 
     my %sums;
     my $files = set();
+    my $every_group = set();
+
+    unless ( grep !/^(sources|all)/, keys %{ $dist_dirs{$dist} } ) {
+	moan "dist '$dist' missing arch-specific dirs; using $DEB_HOST_ARCH";
+	$dist_dirs{$dist}{$DEB_HOST_ARCH}=[];
+    }
 
     for my $arch ( keys %{ $dist_dirs{$dist} } ) {
 
@@ -221,11 +235,9 @@ FILE LOCATION\n";
 	    }
 	}
 	close CONTENTS;
-
-#---
 	my $all_groups = set(map { ($_->{groups}||set())->members
 			       } values %pkgs );
-	say "All groups : $all_groups";
+	$every_group += $all_groups;
 
 	for my $group ( "all", $all_groups->members ) {
 
@@ -363,31 +375,31 @@ FILE LOCATION\n";
 
 	say "preparing Release file for $dist";
 	nstore $release, "dists/$dist/Release.pm3";
+    }
 
-	my ($conf_origin, $conf_label, $conf_desc) = @{{
-	    map { chomp; split ": ", $_, 2 }
-		grep { m{^\w+: } }
-		    `cat dists/$dist/Release`
-		}}{qw(Origin Label Description)}
-		    if ( -e "dists/$dist/Release" );
+    my ($conf_origin, $conf_label, $conf_desc) = @{{
+	map { chomp; split ": ", $_, 2 }
+	    grep { m{^\w+: } }
+		`cat dists/$dist/Release`
+	    }}{qw(Origin Label Description)}
+		if ( -e "dists/$dist/Release" );
 
-	open RELEASE, ">dists/$dist/Release.new" or barf "open(dists/$dist/Release) failed; $!";
-	print RELEASE "Origin: ${\( $origin || $conf_origin || $def_origin )}
+    open RELEASE, ">dists/$dist/Release.new" or barf "open(>dists/$dist/Release.new) failed; $!";
+    print RELEASE "Origin: ${\( $origin || $conf_origin || $def_origin )}
 Label: ${\( $label || $conf_label || $def_label )}
 Suite: ${\( $suites{$dist} || $dist )}
 Codename: $dist
 Date: ".UnixDate("now", "%g")."
 Architectures: ".join(" ",( grep { $_ ne "sources" }
 			    keys %{ $dist_dirs{$dist} } ))."
-Components: all @{[ sort $all_groups->members ]}
+Components: all @{[ sort $every_group->members ]}
 Description: ${\( $desc || $conf_desc || $def_desc )}
 ";
-	for my $line (@$release) {
-	    my ($type, $digest, $length, $filename) = split ":", $line;
-	    chomp($filename);
-	    $sums{$type}{$filename} = [ $digest, $length ];
-	    $files->insert($filename);
-	}
+    for my $line (@$release) {
+	my ($type, $digest, $length, $filename) = split ":", $line;
+	chomp($filename);
+	$sums{$type}{$filename} = [ $digest, $length ];
+	$files->insert($filename);
     }
     for my $type (qw(MD5Sum SHA1)) {
 	print RELEASE "$type:\n";
