@@ -129,6 +129,10 @@ while ( my $next_oldest = pop @releases ) {
 	rename("$path/pool/$rename", "$path/pool/$new_name")
 	    or barf ("in $path/pool: rename($rename => $new_name) ".
 		     "failed; $!");
+	if ( !@releases ) {
+	    # last time through, re-set up the pool dirs
+	    mkdir("$path/$pool/$rename");
+	}
     }
 
     $oldest = $next_oldest;
