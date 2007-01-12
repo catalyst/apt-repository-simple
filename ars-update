@@ -65,9 +65,7 @@ my %dists;
 my %dist_dirs;
 
 my $superceded = set();
-
-my ($DEB_HOST_ARCH) = (map { m{=(.*)} } grep /^DEB_HOST_ARCH=/,
-		       `dpkg-architecture`);
+my $all_arches = set();
 
 for my $dir (@dirs) {
 
@@ -77,10 +75,12 @@ for my $dir (@dirs) {
     my ($pool) = ($dir =~ m{.*/(.*)});
 
     if (my ($dist, $arch) = ($pool =~ m{(.*)-(.*)})) {
-	push @{ $dists{$dist}||=[] }, $dir
-	    if $arch eq "all";
-	push @{ $dist_dirs{$dist}{$arch} ||= [] }, $dir
-	    unless $arch eq "all";
+	if ($arch eq "all") {
+	    push @{ $dists{$dist}||=[] }, $dir
+	} else {
+	    push @{ $dist_dirs{$dist}{$arch} ||= [] }, $dir;
+	    $all_arches->insert($arch);
+	}
     } elsif ( $pool =~ m{^(all|indep|any)$} ) {
 	push @indep_dirs, $dir;
     } else {
@@ -194,18 +194,25 @@ for my $dist ( (set(keys %dists) + set(keys %dist_dirs))->members ) {
     my $every_group = set();
 
     unless ( grep !/^(sources|all)/, keys %{ $dist_dirs{$dist} } ) {
-	moan "dist '$dist' missing arch-specific dirs; using $DEB_HOST_ARCH";
-	$dist_dirs{$dist}{$DEB_HOST_ARCH}=[];
+	my @arches = $all_arches->members;
+	if ( ! @arches ) {
+	    chomp(my $DEB_HOST_ARCH =
+		  `(dpkg --print-architecture || uname -m) 2>/dev/null`);
+	    @arches = $DEB_HOST_ARCH;
+	}
+
+	moan "dist '$dist' missing arch-specific dirs; using: @arches";
+	$dist_dirs{$dist}{$_}=[] for @arches;
     }
 
-    for my $arch ( keys %{ $dist_dirs{$dist} } ) {
+    for my $arch ( $all_arches->members ) {
 
 	# FIXME - write proper Sources files
 	next if $arch eq 'sources';
 
 	my @files = grep { -e }
 	    map { "$_/packages.pm3" }
-		@{ $dist_dirs{$dist}{$arch} },
+		@{ $dist_dirs{$dist}{$arch}||[] },
 		    @{ $dists{$dist} },
 			@indep_dirs;
 
