@@ -1,3 +1,10 @@
+apt-repository-simple (0.05) unstable; urgency=low
+
+  * ars-cycle: leave empty pool directories behind
+  * ars-add: Handle dists with no arch-specific directories
+
+ -- Sam Vilain <sam@vilain.net>  Fri, 12 Jan 2007 14:25:26 +1300
+
 apt-repository-simple (0.04) unstable; urgency=low
 
   * enhance ars-update POD documentation
