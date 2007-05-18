@@ -1,3 +1,9 @@
+apt-repository-simple (0.06) feisty; urgency=low
+
+  * Add more control over gpg options
+
+ -- Sam Vilain <sam@vilain.net>  Fri, 18 May 2007 16:36:38 +1200
+
 apt-repository-simple (0.05) unstable; urgency=low
 
   * ars-cycle: leave empty pool directories behind

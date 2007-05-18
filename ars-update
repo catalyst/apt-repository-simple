@@ -40,6 +40,10 @@ my $desc;
 my $no_sign;
 my $clean_old;
 my $times_not_versions;
+my $signing_key;
+my $keyring;
+my $no_gpg_agent;
+my @gpg_options;
 
 getopt getconf( "force-regen|f" => \$force_regen,
 		"force-rescan|F" => \$force_rescan,
@@ -50,7 +54,17 @@ getopt getconf( "force-regen|f" => \$force_regen,
 		"clean|c" => \$clean_old,
 		"newer|n" => \$times_not_versions,
 		"no-sign|S" => \$no_sign,
+		"signing-key|k=s" => \$signing_key,
+		"keyring|K=s" => \$keyring,
+		"gpg-option|g=s\@" => \@gpg_options,
+		"no-agent" => \$no_gpg_agent,
 	      );
+
+push @gpg_options,
+    ( ($no_gpg_agent? () : ("--use-agent")),
+      ($signing_key ? ("--default-key", $signing_key) : ()),
+      ($keyring ? ("--keyring", $keyring) : ()),
+    );
 
 if ( $path ) {
     chdir($path) or barf "failed to change to $path; $!";
@@ -419,7 +433,7 @@ Description: ${\( $desc || $conf_desc || $def_desc )}
     close RELEASE;
     unless ( $no_sign ) {
 	unlink("dists/$dist/Release.new.asc");
-	system("gpg", "--use-agent", "-b", "-a", "dists/$dist/Release.new");
+	system("gpg", @gpg_options, "-b", "-a", "dists/$dist/Release.new");
 	if ( ! -s "dists/$dist/Release.new.asc" ) {
 	    moan("gpg sign failed; rc=$?");
 	} else {
@@ -549,6 +563,23 @@ Don't try to generate F<.asc> files for the F<Packages> and F<Release>
 files.  These files allow packages to be installed without warning the
 user about them being unsigned - but only if the user also has the key
 used for signing in their APT keyring.  See L<apt-key>.
+
+=item B<-k, --signing-key=ID>
+
+Specify the PGP key used for signing.
+
+=item B<-K, --keyring=FILE>
+
+Specify the keyring in which to find the private PGP key used for
+signing.
+
+=item B<-g, --gpg-option=X>
+
+Aux. method for feeding gpg commandline options
+
+=item B<--no-agent>
+
+Suppress the C<--use-agent> option to GPG.
 
 =item B<-c, --clean>
 
