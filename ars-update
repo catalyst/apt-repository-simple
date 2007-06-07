@@ -60,17 +60,46 @@ getopt getconf( "force-regen|f" => \$force_regen,
 		"no-agent" => \$no_gpg_agent,
 	      );
 
-push @gpg_options,
-    ( ($no_gpg_agent? () : ("--use-agent")),
-      ($signing_key ? ("--default-key", $signing_key) : ()),
-      ($keyring ? ("--keyring", $keyring) : ()),
-    );
-
 if ( $path ) {
     chdir($path) or barf "failed to change to $path; $!";
 }
 
 $path = cwd;
+
+unless ( $no_gpg_agent or $ENV{GPG_AGENT_INFO} ) {
+    # try to find a running agent
+    for my $path ( </tmp/gpg-*/S.*> ) {
+	if ( -S $path ) {
+	    my $pid=`fuser $path 2>/dev/null`;
+	    chomp($pid);
+	    if ( $pid ) {
+		mutter "using GPG agent PID $pid";
+		$ENV{GPG_AGENT_INFO}="$path:$pid:1";
+		last;
+	    }
+	}
+    }
+    if ( !$ENV{GPG_AGENT_INFO} ) {
+	say "Starting the GPG agent";
+	my @vars = `gpg-agent -s --daemon 2>/dev/null`;
+	if ( $? ) {
+	    moan "no GPG agent found - disabling GPG agent";
+	    $no_gpg_agent = 1;
+	} else {
+	    for ( @vars ) {
+		chomp;
+		my ($var, $val) = split "=", $_, 2;
+		$ENV{$var} = $val;
+	    }
+	}
+    }
+}
+
+push @gpg_options,
+    ( ($no_gpg_agent? () : ("--use-agent")),
+      ($signing_key ? ("--default-key", $signing_key) : ()),
+      ($keyring ? ("--keyring", $keyring) : ()),
+    );
 
 my @dirs = <pool/*>;
 
@@ -315,7 +344,9 @@ FILE LOCATION\n";
 		    close PACKAGES;
 		    close CHILD_WTR;
 		    # this process collects SHA1 and MD5 sums and filesizes
+		    print STDERR "Reading lines our children\n";
 		    while (<PARENT_RDR>) {
+			print STDERR "Read a line from the Child: $_";
 			push @$release, $_;
 		    }
 		    close PARENT_RDR;
