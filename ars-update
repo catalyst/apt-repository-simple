@@ -333,6 +333,30 @@ FILE LOCATION\n";
 	    my $max = (max map { ((stat $_)[9]) } @files) ;
 	    if ( $max < ((stat $Packages)[9]||0) and !$force_regen ) {
 		say "no new packages in $dist-$arch ($group)";
+		# we still need to get the sums...
+		for my $file ( $Packages, "$Packages.gz", "$Packages.bz2" ) {
+		    next unless -f $file;
+		    say "getting checksums for $file";
+		    local($/)=\((stat _)[11]||4096);
+		    open FILE, "<$file" or die $!;
+		    binmode FILE;
+		    my $md5 = Digest::MD5->new();
+		    my $sha1 = Digest::SHA1->new();
+		    my $length = 0;
+		    while ( <FILE> ) {
+			$md5->add($_);
+			$sha1->add($_);
+			$length += length;
+		    }
+		    close FILE;
+		    push @$release,
+			(
+			 (join(":","MD5Sum",$md5->hexdigest,
+			       $length,"$file").      "\n"),
+			 (join(":","SHA1",$sha1->hexdigest,
+			       $length,"$file").      "\n")
+			);
+		}
 		next;
 	    }
 
@@ -451,7 +475,8 @@ Description: ${\( $desc || $conf_desc || $def_desc )}
 	my ($type, $digest, $length, $filename) = split ":", $line;
 	chomp($filename);
 	$sums{$type}{$filename} = [ $digest, $length ];
-	$files->insert($filename);
+	$files->insert($filename)
+	    if ( -e "$filename.new" );
     }
     for my $type (qw(MD5Sum SHA1)) {
 	print RELEASE "$type:\n";
