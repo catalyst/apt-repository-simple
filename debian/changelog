@@ -1,8 +1,9 @@
 apt-repository-simple (0.07) feisty; urgency=low
 
   * Better gpg-agent support
+  * Make sure we write out a complete Release file, even without -f
 
- -- Sam Vilain <sam@vilain.net>  Thu,  7 Jun 2007 19:52:32 +1200
+ -- Sam Vilain <sam@vilain.net>  Thu,  7 Jun 2007 21:15:20 +1200
 
 apt-repository-simple (0.06) feisty; urgency=low
 
