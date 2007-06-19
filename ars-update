@@ -73,7 +73,7 @@ unless ( $no_gpg_agent or $ENV{GPG_AGENT_INFO} ) {
 	    my $pid=`fuser $path 2>/dev/null`;
 	    chomp($pid);
 	    if ( $pid ) {
-		mutter "using GPG agent PID $pid";
+		whisper "using GPG agent PID $pid";
 		$ENV{GPG_AGENT_INFO}="$path:$pid:1";
 		last;
 	    }
@@ -127,7 +127,7 @@ for my $dir (@dirs) {
     } elsif ( $pool =~ m{^(all|indep|any)$} ) {
 	push @indep_dirs, $dir;
     } else {
-	mutter "ignoring directory $dir";
+	whisper "ignoring directory $dir";
 	next;
     }
 
@@ -141,7 +141,7 @@ for my $dir (@dirs) {
 	    # spot a renamed pool and fix the data up.
 	    my ($old_pool) = $v->{filename} =~ m{^pool/([^/]*)};
 	    if ( $old_pool ne $pool ) {
-		whisper "detected pool change in $v->{filename}";
+		#whisper "detected pool change in $v->{filename}";
 		$v->{filename} =~
 		    s{^pool/\Q$old_pool\E}{pool/$pool};
 		$dirty = 1;
@@ -169,7 +169,7 @@ for my $dir (@dirs) {
 
 		    # force a rescan if the timestamp changes
 		    if ( (stat _)[9] != $pkgs{$pkg}{mtime} ) {
-			whisper "rescanning $pkg (mtime changed)";
+			#whisper "rescanning $pkg (mtime changed)";
 			delete $pkgs{$pkg};
 		    }
 		}
@@ -182,7 +182,7 @@ for my $dir (@dirs) {
 			or ( ! -e "$path/$pkgs{$pkg}{filename}" )
 		      ) {
 		    $superceded->insert($pkgs{$pkg}{filename});
-		    whisper "scanning $pkg";
+		    #whisper "scanning $pkg";
 		    delete $pkgs{$pkg};
 		} else {
 		    $superceded->insert($rel_filename);
@@ -259,7 +259,7 @@ for my $dist ( (set(keys %dists) + set(keys %dist_dirs))->members ) {
 		    @{ $dists{$dist} },
 			@indep_dirs;
 
-	say("preparing Contents files for $dist-$arch");
+	mutter("preparing Contents files for $dist-$arch");
 	my @dirs = map { retrieve $_ } @files;
 
 	my %pkgs;
@@ -332,11 +332,11 @@ FILE LOCATION\n";
 
 	    my $max = (max map { ((stat $_)[9]) } @files) ;
 	    if ( $max < ((stat $Packages)[9]||0) and !$force_regen ) {
-		say "no new packages in $dist-$arch ($group)";
+		mutter "no new packages in $dist-$arch ($group)";
 		# we still need to get the sums...
 		for my $file ( $Packages, "$Packages.gz", "$Packages.bz2" ) {
 		    next unless -f $file;
-		    say "getting checksums for $file";
+		    mutter "getting checksums for $file";
 		    local($/)=\((stat _)[11]||4096);
 		    open FILE, "<$file" or die $!;
 		    binmode FILE;
@@ -449,7 +449,7 @@ FILE LOCATION\n";
 	    # just like that!  :)
 	}
 
-	say "preparing Release file for $dist";
+	mutter "preparing Release file for $dist";
 	nstore $release, "dists/$dist/Release.pm3";
     }
 
@@ -487,6 +487,7 @@ Description: ${\( $desc || $conf_desc || $def_desc )}
 	}
     }
     close RELEASE;
+    say "wrote dists/$dist/Release";
     unless ( $no_sign ) {
 	unlink("dists/$dist/Release.new.asc");
 	system("gpg", @gpg_options, "-b", "-a", "dists/$dist/Release.new");
