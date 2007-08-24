@@ -98,7 +98,7 @@ unless ( $no_gpg_agent or $ENV{GPG_AGENT_INFO} ) {
 push @gpg_options,
     ( ($no_gpg_agent? () : ("--use-agent")),
       ($signing_key ? ("--default-key", $signing_key) : ()),
-      ($keyring ? ("--keyring", $keyring) : ()),
+      ($keyring ? ("--secret-keyring", $keyring) : ()),
     );
 
 my @dirs = <pool/*>;
