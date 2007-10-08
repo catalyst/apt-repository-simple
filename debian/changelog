@@ -1,3 +1,9 @@
+apt-repository-simple (0.11) feisty; urgency=low
+
+  * Fix signing with ars-update
+
+ -- Sam Vilain <sam@vilain.net>  Fri, 24 Aug 2007 15:59:20 +1200
+
 apt-repository-simple (0.10) feisty; urgency=low
 
   * See git changelog
