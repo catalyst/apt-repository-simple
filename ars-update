@@ -246,6 +246,7 @@ for my $dist ( (set(keys %dists) + set(keys %dist_dirs))->members ) {
 
 	moan "dist '$dist' missing arch-specific dirs; using: @arches";
 	$dist_dirs{$dist}{$_}=[] for @arches;
+	$all_arches->insert(@arches);
     }
 
     for my $arch ( $all_arches->members ) {
