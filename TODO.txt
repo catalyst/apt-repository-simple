@@ -1,0 +1,15 @@
+
+ - support source packages, including references to source control as
+   a form of a source package.
+
+ - be a bit more careful about what we sign.  In particular, when you
+   update a signed repo it should show you the new packages that
+   you're signing, or if non-interactive just sign the packages you
+   added.  Potentially should even sign the .pm3 files.
+
+ - dh-make-git helper;
+     dh-make-git --repo git://myrepo.example.com/repos.git \
+     	--upload ssh://poe -r distname -g groupname
+
+ - make the current package groups files a little less
+   proof-of-concept-y.
