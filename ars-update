@@ -491,7 +491,10 @@ Description: ${\( $desc || $conf_desc || $def_desc )}
     say "wrote dists/$dist/Release";
     unless ( $no_sign ) {
 	unlink("dists/$dist/Release.new.asc");
-	system("gpg", @gpg_options, "-b", "-a", "dists/$dist/Release.new");
+
+	run(-in => \*STDIN, -out => \*STDOUT,
+	    "gpg", @gpg_options, "-b", "-a", "dists/$dist/Release.new");
+	    
 	if ( ! -s "dists/$dist/Release.new.asc" ) {
 	    moan("gpg sign failed; rc=$?");
 	} else {
