@@ -1,3 +1,9 @@
+apt-repository-simple (0.13) feisty; urgency=low
+
+  * Fix some glaring gpg option bugs
+
+ -- Sam Vilain <sam@vilain.net>  Sun, 16 Mar 2008 01:38:53 +1300
+
 apt-repository-simple (0.12) feisty; urgency=low
 
   * Fix case where there are no releases with any arch-specific packages
