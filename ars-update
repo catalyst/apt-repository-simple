@@ -95,10 +95,15 @@ unless ( $no_gpg_agent or $ENV{GPG_AGENT_INFO} ) {
     }
 }
 
+(my $sec_keyring = $keyring)
+  =~ s{(p)ubring}{secring};
+undef($sec_keyring) unless $1;
+
 push @gpg_options,
     ( ($no_gpg_agent? () : ("--use-agent")),
       ($signing_key ? ("--default-key", $signing_key) : ()),
-      ($keyring ? ("--secret-keyring", $keyring) : ()),
+      ($keyring ? ("--keyring", $keyring) : ()),
+      ($sec_keyring ? ("--secret-keyring", $sec_keyring) : ()),
     );
 
 my @dirs = <pool/*>;
