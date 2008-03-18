@@ -180,16 +180,18 @@ for my $dir (@dirs) {
 		}
 		elsif ( ( $times_not_versions
 			  ? ( $pkgs{$pkg}{mtime} < ((stat _)[9]) )
-			  : ( $pkgs{$pkg}{version} lt $vers
+			  : ( debvers_cmp($pkgs{$pkg}{version}, $vers) < 0
 			      or ( $pkgs{$pkg}{version} eq $vers
 				   and $pkgs{$pkg}{mtime} != ((stat _)[9]))
 			    ) )
 			or ( ! -e "$path/$pkgs{$pkg}{filename}" )
 		      ) {
+		    whisper "superceding $pkgs{$pkg}{filename} with $vers";
 		    $superceded->insert($pkgs{$pkg}{filename});
-		    #whisper "scanning $pkg";
 		    delete $pkgs{$pkg};
 		} else {
+        	    whisper "$rel_filename is already superceded by "
+			."$pkgs{$pkg}{filename}";
 		    $superceded->insert($rel_filename);
 		}
 	    }
@@ -569,6 +571,47 @@ sub get_md5sums {
     return undef if $err;
     my @sums = map { chomp; m/(\S+)\s*(.*)/ && ($2 => $1) } @data;
     return \@sums;
+}
+
+sub split_debver {
+    return (my ($epoch, $version, $pkg_version) = ($_[0] =~ m{^(?:(\d+):)?(\d+.*?)(?:-(\d[^\-]*))?$}));
+}
+
+sub cmp_vers {
+    my $A = shift;
+    $A = "" if !defined $A;
+    my $B = shift;
+    $B = "" if !defined $B;
+    my @p_a = split /\./, $A;
+    my @p_b = split /\./, $B;
+    my $rv;
+    while (@p_a or @p_b) {
+      my $a = shift @p_a;
+      my $b = shift @p_b;
+      if (defined $a and !defined $b) {
+        return 1;
+      }
+      elsif (defined $b and !defined $a) {
+        return -1;
+      }
+      elsif ( $a > $b ) {
+        return 1;
+      }
+      elsif ( $b > $a ) {
+        return -1;
+      }
+    }
+    return 0;
+}
+
+sub debvers_cmp {
+    my ($a_ep, $a_v, $a_post) = split_debver(shift);
+    my ($b_ep, $b_v, $b_post) = split_debver(shift);
+    cmp_vers($a_ep, $b_ep)
+      or
+    cmp_vers($a_v, $b_v)
+      or
+    cmp_vers($a_post, $b_post)
 }
 
 __END__
