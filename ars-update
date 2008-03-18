@@ -337,7 +337,7 @@ FILE LOCATION\n";
 	    my $Packages = "$dir/Packages";
 
 	    my $max = (max map { ((stat $_)[9]) } @files) ;
-	    if ( $max < ((stat $Packages)[9]||0) and !$force_regen ) {
+	    if ( ($max||0) < ((stat $Packages)[9]||0) and !$force_regen ) {
 		mutter "no new packages in $dist-$arch ($group)";
 		# we still need to get the sums...
 		for my $file ( $Packages, "$Packages.gz", "$Packages.bz2" ) {
