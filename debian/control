@@ -1,10 +1,10 @@
 Source: apt-repository-simple
 Section: perl
 Priority: optional
-Build-Depends: debhelper (>= 4.0.2)
+Build-Depends: debhelper (>= 5)
 Build-Depends-Indep: perl (>= 5.8.0-7)
 Maintainer: Sam Vilain <samv@catalyst.net.nz>
-Standards-Version: 3.6.1
+Standards-Version: 3.7.3
 
 Package: apt-repository-simple
 Architecture: all
