@@ -13,6 +13,7 @@ use Date::Manip qw(UnixDate);
 use IO::Handle;
 use YAML::Syck qw(Dump);
 use Cwd;
+use Fcntl qw(:mode);
 
 my @z = qw(gz bz2);
 my %z_progs = (gz => [qw(gzip -9)],
@@ -43,6 +44,7 @@ my $times_not_versions;
 my $signing_key;
 my $keyring;
 my $no_gpg_agent;
+my $perms;
 my @gpg_options;
 
 getopt getconf( "force-regen|f" => \$force_regen,
@@ -53,12 +55,19 @@ getopt getconf( "force-regen|f" => \$force_regen,
 		"desc|D=s" => \$desc,
 		"clean|c" => \$clean_old,
 		"newer|n" => \$times_not_versions,
+		"perms=s" => \$perms,
+		"shared" => sub { $perms = "2775" },
 		"no-sign|S" => \$no_sign,
 		"signing-key|k=s" => \$signing_key,
 		"keyring|K=s" => \$keyring,
 		"gpg-option|g=s\@" => \@gpg_options,
 		"no-agent" => \$no_gpg_agent,
 	      );
+
+if ($perms) {
+	oct($perms) or barf "bad octal value: $perms";
+	$perms = oct($perms);
+}
 
 if ( $path ) {
     chdir($path) or barf "failed to change to $path; $!";
@@ -271,8 +280,8 @@ for my $dist ( (set(keys %dists) + set(keys %dist_dirs))->members ) {
 	my @dirs = map { retrieve $_ } @files;
 
 	my %pkgs;
-	( -d "dists" ) || mkdir("dists");
-	( -d "dists/$dist" ) || mkdir("dists/$dist");
+	( -d "dists" ) || _mkdir("dists", $perms);
+	( -d "dists/$dist" ) || _mkdir("dists/$dist", $perms);
 	open CONTENTS, "| gzip > dists/$dist/Contents-$arch.gz";
 	print CONTENTS "Install the apt-file package to automatically search this file.
 FILE LOCATION\n";
@@ -301,7 +310,7 @@ FILE LOCATION\n";
 
 	    my $dir = "dists/$dist/$group/binary-$arch";
 
-	    ( -e $dir ) || run("mkdir", "-p", $dir);
+	    ( -e $dir ) || _mkdir($dir, $perms);
 
 	    open RELEASE, ">$dir/Release.new"
 		or barf "open($dir/Release.new) failed; $!";
@@ -612,6 +621,25 @@ sub debvers_cmp {
     cmp_vers($a_v, $b_v)
       or
     cmp_vers($a_post, $b_post)
+}
+
+sub _mkdir {
+    my $dir = shift;
+    my $perms = shift;
+    my ($dn) = ($dir =~ m{(.*)/[^/]*/?$});
+    if ( $dn and ! -d $dn ) {
+    	_mkdir($dn, $perms);
+    }
+    if ( ! -d $dir ) {
+        mkdir($dir) or barf "mkdir($dir) failed; $!";
+	stat $dir;
+    }
+    if ($perms) {
+    	my $mode = (stat _)[2];
+	if ($mode & 07777 != $perms ) {
+	    chmod($perms, $dir) or barf "chmod($perms, $dir) failed; $!";
+    	}
+    }
 }
 
 __END__
