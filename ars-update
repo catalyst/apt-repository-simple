@@ -11,6 +11,7 @@ use Digest::SHA1;
 use Digest::MD5;
 use Date::Manip qw(UnixDate);
 use IO::Handle;
+use IO::Plumbing;
 use YAML::Syck qw(Dump);
 use Cwd;
 use Fcntl qw(:mode);
@@ -377,92 +378,82 @@ FILE LOCATION\n";
 		next;
 	    }
 
-	    # for getting back MD5 and SHA1 sums
-	    pipe(PARENT_RDR, CHILD_WTR);
+	    # this fragment will write out a packages file to STDOUT
+	    my $print_packages = new IO::Plumbing
+		 code => sub {
+		      for my $pkg (sort keys %pkgs) {
+			   next unless $group eq "all" or
+				($pkgs{$pkg}{groups} and
+				 $pkgs{$pkg}{groups}->includes($group));
+			   print map {
+				$_
+			   } ($n++ ? "\n" : ""), display($pkgs{$pkg});
+		      }
+		 };
 
-	    if (my $pid = open PACKAGES, "|-") {
-		if (my $pid2 = fork()) {
-		    close PACKAGES;
-		    close CHILD_WTR;
-		    # this process collects SHA1 and MD5 sums and filesizes
-		    print STDERR "Reading lines our children\n";
-		    while (<PARENT_RDR>) {
-			print STDERR "Read a line from the Child: $_";
-			push @$release, $_;
-		    }
-		    close PARENT_RDR;
-		} elsif (!defined $pid2) {
-		    die "fork failed; $!";
-		} else {
-		    # this process writes the Packages contents
-		    my $n;
-		    my $md5 = Digest::MD5->new();
-		    my $sha1 = Digest::SHA1->new();
-		    my $length = 0;
-		    open REALPACKAGES, ">$Packages.new" or barf("open($Packages.new) failed; $!");
-		    for my $pkg (sort keys %pkgs) {
-			next unless $group eq "all" or
-			    ($pkgs{$pkg}{groups} and
-			     $pkgs{$pkg}{groups}->includes($group));
-			print PACKAGES map {
-			    defined($_) or warn "bah";
-			    $md5->add($_);
-			    $sha1->add($_);
-			    $length += length($_);
-			    print REALPACKAGES $_;
-			    $_
-			} ($n++ ? "\n" : ""), display($pkgs{$pkg});
-		    }
-		    close REALPACKAGES;
-		    close PACKAGES;
-		    print CHILD_WTR
-			join("", (join(":","MD5Sum",$md5->hexdigest,$length,"$Packages"), "\n",
-				  join(":","SHA1",$sha1->hexdigest,$length,"$Packages"), "\n"));
-		    exit(0);
-		}
-	    } elsif (!defined $pid) {
-		die "fork failed; $!";
-	    } else {
-
-		# child - sees Packages content on STDIN.
-		# This process does a "tee", as well as summing the
-		# Packages file.
-		my $md5 = Digest::MD5->new();
-		my $sha1 = Digest::SHA1->new();
-		my $length = 0;
-		my %fh;
-		for my $z (@z) {
-		    if (my $z_pid = open $fh{$z}, "|-") {
-			# parent... just continue
-		    } elsif (!defined $z_pid) {
-			die "fork failed; $!";
-		    } else {
-			if (my $z_sum_pid = open STDOUT, "|-") {
-			    exec(@{$z_progs{$z}}) or exit(1);
-			} else {
-			    open STDOUT, ">$Packages.$z.new" or barf $!;
-			    while (<STDIN>) {
-				$length += length $_;
-				$md5->add($_);
-				$sha1->add($_);
-				print $_;
-			    }
-			    print CHILD_WTR
-				join("", (join(":","MD5Sum",$md5->hexdigest,$length,"$Packages.$z"), "\n",
-					  join(":","SHA1",$sha1->hexdigest,$length,"$Packages.$z"), "\n"));
-			    exit(0);
-			}
-		    }
-		}
-		while (<STDIN>) {
-		    $length += length $_;
-		    $md5->add($_);
-		    $sha1->add($_);
-		    for my $i (@z) { print { $fh{$i} } $_ };
-		} 
-		print CHILD_WTR join(":","MD5Sum",$md5->hexdigest,$length,$Packages)."\n";
-		exit(0);
+	    # checksum each compression format separately
+	    my %hashers;
+	    for my $ext ( "", map { ".$_" } @z ) {
+		 $hashers{$ext} =
+		      new IO::Plumbing
+			   code => sub {
+				my $md5 = Digest::MD5->new();
+				my $sha1 = Digest::SHA1->new();
+				while (<STDIN>) {
+				     $length += length $_;
+				     $md5->add($_);
+				     $sha1->add($_);
+				     print $_;
+				}
+				print(join(":","MD5Sum",$md5->hexdigest,
+					   $length,"$Packages.$ext"), "\n",
+				      join(":","SHA1",$sha1->hexdigest,
+					   $length,"$Packages.$ext"), "\n");
+			   };
 	    }
+
+	    # make the compressor plumbs
+	    my %compressors;
+	    for ( @z ) {
+		 $compressors{$_} = plumb $z_progs{$_};
+	    }
+
+	    # this sort of thing should get built into IO::Plumbing
+	    my $tee = new IO::Plumbing
+		 code => sub {
+		      my @hoses = map { hose(output => $compressors{$_}) }
+			   @z, $hashers{""};
+		      while ( <STDIN> ) {
+			   for my $hose ( @hoses ) {
+				print { $hose->out_fh } $_;
+			   }
+		      }
+		 };
+
+	    # so, now...
+
+	    # for getting back MD5 and SHA1 sums
+	    my $bucket = bucket($release);
+
+	    $print_packages->output($tee);
+	    for ( "", @z ) {
+		 $hashers{$_}->output($bucket)
+	    }
+
+	    $print_packages->execute;
+
+	    my $errors;
+	    for my $plumb ( $print_packages, values %hashers,
+			    values %compressors, $bucket
+			  ) {
+		 if ( !$plumb->ok ) {
+		      moan "$plumb exploded; ".$plumb->error;
+		      $errors++;
+		 }
+	    }
+
+	    barf "pipeline exploded, aborting" if $errors;
+
 	    # just like that!  :)
 	}
 
