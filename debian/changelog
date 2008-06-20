@@ -1,3 +1,20 @@
+apt-repository-simple (0.14) feisty; urgency=low
+
+  * Improve the copyright statement [François]
+  * Remove dependency on gzip, it's an essential package so it's
+    guaranteed to be there [François]
+  * Remove unnecessary commented-out lines [François]
+  * Bump Standards-Version to 3.7.3 and debhelper compatibility to 5
+    [François]
+  * Capitalize Debian in the package description [François]
+  * Make sure docs and changelogs are installed [François]
+  * Stuff should be build in the "indep" rule [François]
+  * Fix a small uninit. value bug warning [Sam]
+  * ars-update: add smarter function for compare package versions [Sam]
+  * Support for repository permissions [Sam]
+
+ -- Sam Vilain <sam@vilain.net>  Sat, 21 Jun 2008 10:40:43 +1200
+
 apt-repository-simple (0.13) feisty; urgency=low
 
   * Fix some glaring gpg option bugs
