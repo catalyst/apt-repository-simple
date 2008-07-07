@@ -1,0 +1,9 @@
+Summary: ars-update does not support source packages
+Status: New
+CreatedBy: Sam Vilain <sam.vilain@catalyst.net.nz>
+AssignedTo: Sam Vilain <sam.vilain@catalyst.net.nz>
+Label: 
+Inserted: 2008-06-22T23:22:13
+Updated: 2008-06-22T23:22:13
+
+ars-update needs to handle indexing source packages.
