@@ -1,0 +1,12 @@
+Summary: 'ars-add -h' does not respect remote config, just local
+Status: New
+CreatedBy: Sam Vilain <sam.vilain@catalyst.net.nz>
+AssignedTo: Sam Vilain <sam.vilain@catalyst.net.nz>
+Label: 
+Inserted: 2008-07-07T23:32:19
+Updated: 2008-07-07T23:32:19
+
+When you use 'ars-add -h', it makes a local tarball and transmits that
+to the other end.  This effectively prevents the remote ARS
+configuration from taking effect.  ars-update should support reading
+new deb contents from standard input.

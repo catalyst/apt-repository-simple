@@ -1,0 +1,10 @@
+Summary: Use IO::Plumbing for filehandle stuff
+Status: New
+CreatedBy: Sam Vilain <sam.vilain@catalyst.net.nz>
+AssignedTo: Sam Vilain <sam.vilain@catalyst.net.nz>
+Label: 
+Inserted: 2008-07-07T23:44:29
+Updated: 2008-07-07T23:44:29
+
+The code which handles the multiple processes and forking is all quite
+complicated; use IO::Plumbing to simplify it.
