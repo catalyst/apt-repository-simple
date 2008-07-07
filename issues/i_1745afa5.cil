@@ -1,0 +1,10 @@
+Summary: permissions option does not set file permissions
+Status: New
+CreatedBy: Sam Vilain <sam.vilain@catalyst.net.nz>
+AssignedTo: Sam Vilain <sam.vilain@catalyst.net.nz>
+Label: 
+Inserted: 2008-07-07T23:20:48
+Updated: 2008-07-07T23:20:48
+
+The "perms" option changes what permissions are set on directories,
+but not files.  It should affect everything!
