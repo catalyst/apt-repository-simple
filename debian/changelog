@@ -1,3 +1,9 @@
+apt-repository-simple (0.15) feisty; urgency=low
+
+  * A couple of minor bugfixes
+
+ -- Sam Vilain <sam@vilain.net>  Wed, 16 Jul 2008 14:02:25 +1200
+
 apt-repository-simple (0.14) feisty; urgency=low
 
   * Improve the copyright statement [François]
