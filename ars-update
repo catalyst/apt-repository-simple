@@ -636,7 +636,7 @@ sub _mkdir {
     }
     if ($perms) {
     	my $mode = (stat _)[2];
-	if ($mode & 07777 != $perms ) {
+	if ( ($mode & 07777) != $perms ) {
 	    chmod($perms, $dir) or barf "chmod($perms, $dir) failed; $!";
     	}
     }
