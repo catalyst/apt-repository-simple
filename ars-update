@@ -385,9 +385,7 @@ FILE LOCATION\n";
 		    close PACKAGES;
 		    close CHILD_WTR;
 		    # this process collects SHA1 and MD5 sums and filesizes
-		    print STDERR "Reading lines our children\n";
 		    while (<PARENT_RDR>) {
-			print STDERR "Read a line from the Child: $_";
 			push @$release, $_;
 		    }
 		    close PARENT_RDR;
