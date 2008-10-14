@@ -6,12 +6,19 @@ Upstream Author: Sam Vilain <sam.vilain@catalyst.net.nz>
 
 Copyright: (C) 2006-2008 Catalyst IT (NZ) Limited
 
-   This program is free software; you can redistribute it and/or
-   modify it under the same terms as Perl itself.
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
-   Perl is distributed under your choice of the GNU General Public License
-   or the Artistic License.
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-On Debian GNU/Linux systems, the complete text of the
-GNU General Public License can be found in `/usr/share/common-licenses/GPL'
-and the Artistic Licence in `/usr/share/common-licenses/Artistic'.
+On Debian GNU/Linux systems, the complete text of the GNU General
+Public License version 3 can be found in
+`/usr/share/common-licenses/GPL-3'.  It is also distributed with the
+source of this program.
+
+If you do not find it there, see L<http://www.gnu.org/licenses/>.
