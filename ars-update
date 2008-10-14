@@ -581,34 +581,98 @@ sub get_md5sums {
 }
 
 sub split_debver {
-    return (my ($epoch, $version, $pkg_version) = ($_[0] =~ m{^(?:(\d+):)?(\d+.*?)(?:-(\d[^\-]*))?$}));
+    my ($eopch, $version, $revision);
+    my $ver = shift;
+    if ($ver =~ /:/)
+    {
+	$ver =~ /^(\d+):(.+)/ or die "bad version number '$ver'";
+	$epoch = $1;
+	$ver = $2;
+    }
+    else
+    {
+	$epoch = 0;
+    }
+    if ($ver =~ /(.+)-(.+)$/)
+    {
+	$version = $1;
+	$revision = $2;
+    }
+    else
+    {
+	$version = $ver;
+	$revision = 0;
+    }
+    return ($epoch, $version, $revision);
 }
 
-sub cmp_vers {
-    my $A = shift;
-    $A = "" if !defined $A;
-    my $B = shift;
-    $B = "" if !defined $B;
-    my @p_a = split /\./, $A;
-    my @p_b = split /\./, $B;
-    my $rv;
-    while (@p_a or @p_b) {
-      my $a = shift @p_a;
-      my $b = shift @p_b;
-      if (defined $a and !defined $b) {
-        return 1;
-      }
-      elsif (defined $b and !defined $a) {
-        return -1;
-      }
-      elsif ( $a > $b ) {
-        return 1;
-      }
-      elsif ( $b > $a ) {
-        return -1;
-      }
-    }
-    return 0;
+# cmp_vers
+
+# This function is almost exactly equivalent
+# to dpkg's verrevcmp function, including the
+# order subroutine which it uses.
+
+sub verrevcmp_order {
+	my ($x) = @_;
+	##define order(x) ((x) == '~' ? -1 \
+	#           : cisdigit((x)) ? 0 \
+	#           : !(x) ? 0 \
+	#           : cisalpha((x)) ? (x) \
+	#           : (x) + 256)
+	# This comparison is out of dpkg's order to avoid
+	# comparing things to undef and triggering warnings.
+	if (not defined $x) {
+		return 0;
+	}
+	elsif ($x eq '~') {
+		return -1;
+	}
+	elsif ($x =~ /^\d$/) {
+		return 0;
+	}
+	elsif ($x =~ /^[A-Z]$/i) {
+		return ord($x);
+	}
+	else {
+		return ord($x) + 256;
+	}
+}
+
+sub cmp_vers($$)
+{
+     my ($val, $ref) = @_;
+     $val = "" if not defined $val;
+     $ref = "" if not defined $ref;
+     my @val = split //,$val;
+     my @ref = split //,$ref;
+     my $vc = shift @val;
+     my $rc = shift @ref;
+     while (defined $vc or defined $rc) {
+	  my $first_diff = 0;
+	  while ((defined $vc and $vc !~ /^\d$/) or
+		 (defined $rc and $rc !~ /^\d$/)) {
+	       my $vo = verrevcmp_order($vc);
+	       my $ro = verrevcmp_order($rc);
+	       # Unlike dpkg's verrevcmp, we only return 1 or -1 here.
+	       return (($vo - $ro > 0) ? 1 : -1) if $vo != $ro;
+	       $vc = shift @val; $rc = shift @ref;
+	  }
+	  while (defined $vc and $vc eq '0') {
+	       $vc = shift @val;
+	  }
+	  while (defined $rc and $rc eq '0') {
+	       $rc = shift @ref;
+	  }
+	  while (defined $vc and $vc =~ /^\d$/ and
+		 defined $rc and $rc =~ /^\d$/) {
+	       $first_diff = ord($vc) - ord($rc) if !$first_diff;
+	       $vc = shift @val; $rc = shift @ref;
+	  }
+	  return 1 if defined $vc and $vc =~ /^\d$/;
+	  return -1 if defined $rc and $rc =~ /^\d$/;
+	  return $first_diff if $first_diff;
+     }
+     return 0;
 }
 
 sub debvers_cmp {
@@ -759,6 +823,16 @@ L<dpkg-scanpackages>, L<dpkg-deb>, L<apt>
 Sam Vilain, <samv@cpan.org>
 
 Sponsored by Catalyst IT Ltd, L<http://www.catalyst.net.nz/>
+
+A couple of functions were lifted from Dpkg::Version, potentially any
+of these copyright notices apply:
+
+Copyright Colin Watson <cjwatson@debian.org>
+Copyright Ian Jackson <iwj@debian.org>
+Copyright 2007 by Don Armstrong <don@donarmstrong.com>.
+
+Thankfully they released the work under the GNU General Public License
+v2+.
 
 =cut
 
