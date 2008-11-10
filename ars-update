@@ -779,7 +779,8 @@ used for signing in their APT keyring.  See L<apt-key>.
 
 =item B<-k, --signing-key=ID>
 
-Specify the PGP key used for signing.
+Specify the PGP key used for signing.  Note that this is relative to
+the ARS root.
 
 =item B<-K, --keyring=FILE>
 
