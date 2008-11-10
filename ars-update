@@ -48,22 +48,35 @@ my $no_gpg_agent;
 my $perms;
 my @gpg_options;
 
-getopt getconf( "force-regen|f" => \$force_regen,
-		"force-rescan|F" => \$force_rescan,
-		"path|p=s" => \$path,
-		"origin|o=s" => \$origin,
-		"label|l=s" => \$label,
-		"desc|D=s" => \$desc,
-		"clean|c" => \$clean_old,
-		"newer|n" => \$times_not_versions,
-		"perms=s" => \$perms,
-		"shared" => sub { $perms = "2775" },
-		"no-sign|S" => \$no_sign,
-		"signing-key|k=s" => \$signing_key,
-		"keyring|K=s" => \$keyring,
-		"gpg-option|g=s\@" => \@gpg_options,
-		"no-agent" => \$no_gpg_agent,
-	      );
+# first, configure just the path..
+getopt getconf ( "path|p=s" => \$path );
+
+our @getopt_options =
+	( "force-regen|f" => \$force_regen,
+	  "force-rescan|F" => \$force_rescan,
+	  "origin|o=s" => \$origin,
+	  "label|l=s" => \$label,
+	  "desc|D=s" => \$desc,
+	  "clean|c" => \$clean_old,
+	  "newer|n" => \$times_not_versions,
+	  "perms=s" => \$perms,
+	  "shared" => sub { $perms = "2775" },
+	  "no-sign|S" => \$no_sign,
+	  "signing-key|k=s" => \$signing_key,
+	  "keyring|K=s" => \$keyring,
+	  "gpg-option|g=s\@" => \@gpg_options,
+	  "no-agent" => \$no_gpg_agent,
+	 );
+
+# get the rest of the options from system default/user config files
+getconf @getopt_options;
+
+# allow repository-specific config files in etc/ars-update.conf
+$path ||= ".";
+eval { getconf_f "$path/etc/ars-update.conf", @getopt_options };
+
+# and command-line overrides them all
+getopt @getopt_options;
 
 if ($perms) {
 	oct($perms) or barf "bad octal value: $perms";
@@ -814,6 +827,35 @@ Display output to help someone debug this script, not the
 process going on.
 
 =back
+
+=head1 CONFIGURATION FILES
+
+You can configure this program by placing a YAML file in any of the
+following locations:
+
+=over
+
+=item F<$HOME/.ars-updaterc>
+
+=item F</etc/perl/ars-update.conf>
+
+=item F</etc/ars-update.conf>
+
+Defaults places that Scriptalicious will search for configuration.
+
+=item F<path/etc/ars-update.conf>
+
+In-repository configuration.
+
+=back
+
+The format of this file should be option: value; eg,
+
+  origin: mycompany.com
+  label: My Company's Stuff
+  shared: 1
+  signing-key: keys/secring.gpg
+  keyring: keys/pubring.gpg
 
 =head1 SEE ALSO
 
