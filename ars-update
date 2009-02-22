@@ -93,7 +93,13 @@ unless ( $no_gpg_agent or $ENV{GPG_AGENT_INFO} ) {
     # try to find a running agent
     for my $path ( </tmp/gpg-*/S.*> ) {
 	if ( -S $path ) {
-	    my $pid=`fuser $path 2>/dev/null`;
+	    my $pid;
+	    eval {
+		local $SIG{ALRM} = sub { die "alarm\n" };
+		alarm 5;
+		$pid = `fuser $path 2>/dev/null`;
+		alarm 0;
+	    };
 	    chomp($pid);
 	    if ( $pid ) {
 		whisper "using GPG agent PID $pid";
