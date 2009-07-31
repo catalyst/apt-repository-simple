@@ -608,7 +608,7 @@ sub get_md5sums {
 }
 
 sub split_debver {
-    my ($eopch, $version, $revision);
+    my ($epoch, $version, $revision);
     my $ver = shift;
     if ($ver =~ /:/)
     {
