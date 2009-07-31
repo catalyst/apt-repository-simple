@@ -68,9 +68,6 @@ our @getopt_options =
 	  "no-agent" => \$no_gpg_agent,
 	 );
 
-# apply umask to all files written via umask
-umask( 0777 ^ oct($perms) & 0777 );
-
 # get the rest of the options from system default/user config files
 getconf @getopt_options;
 
@@ -84,6 +81,8 @@ getopt @getopt_options;
 if ($perms) {
 	oct($perms) or barf "bad octal value: $perms";
 	$perms = oct($perms);
+	# apply umask to all files written via umask
+	umask( 0777 ^ $perms & 0777 );
 }
 
 if ( $path ) {
