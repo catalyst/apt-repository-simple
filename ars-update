@@ -450,8 +450,9 @@ FILE LOCATION\n";
 		# child - sees Packages content on STDIN.
 		open STDIN, "<&PACKAGES_RDR";
 		close PACKAGES_WTR;
-		# This process does a "tee", as well as summing the
-		# Packages file.
+		# This process just does a "tee", but we create
+		# md5/sha1 objects for the children to summing the
+		# compressed versions
 		my $md5 = Digest::MD5->new();
 		my $sha1 = Digest::SHA1->new();
 		my $length = 0;
@@ -480,13 +481,11 @@ FILE LOCATION\n";
 			}
 		    }
 		}
+		close CHILD_WTR;
 		while (<STDIN>) {
 		    $length += length $_;
-		    $md5->add($_);
-		    $sha1->add($_);
 		    for my $i (@z) { print { $fh{$i} } $_ };
-		} 
-		print CHILD_WTR join(":","MD5Sum",$md5->hexdigest,$length,$Packages)."\n";
+		}
 		exit(0);
 	    }
 	    # just like that!  :)
