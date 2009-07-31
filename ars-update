@@ -68,6 +68,9 @@ our @getopt_options =
 	  "no-agent" => \$no_gpg_agent,
 	 );
 
+# apply umask to all files written via umask
+umask( 0777 ^ oct($perms) & 0777 );
+
 # get the rest of the options from system default/user config files
 getconf @getopt_options;
 
@@ -459,6 +462,7 @@ FILE LOCATION\n";
 		    } elsif (!defined $z_pid) {
 			die "fork failed; $!";
 		    } else {
+			close $_ for values %fh;
 			if (my $z_sum_pid = open STDOUT, "|-") {
 			    exec(@{$z_progs{$z}}) or exit(1);
 			} else {
