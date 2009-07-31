@@ -2,7 +2,7 @@
 #
 
 use strict;
-use Scriptalicious;
+use Scriptalicious qw(1.12);
 #use YAML qw(LoadFile DumpFile Dump);
 use Storable qw(nstore retrieve);
 use File::Find qw(find);
@@ -49,7 +49,7 @@ my $perms;
 my @gpg_options;
 
 # first, configure just the path..
-getopt getconf ( "path|p=s" => \$path );
+getopt_lenient getconf ( "path|p=s" => \$path );
 
 our @getopt_options =
 	( "force-regen|f" => \$force_regen,
@@ -74,9 +74,9 @@ umask( 0777 ^ oct($perms) & 0777 );
 # get the rest of the options from system default/user config files
 getconf @getopt_options;
 
-# allow repository-specific config files in etc/ars-update.conf
+# allow repository-specific config files in etc/ars.conf
 $path ||= ".";
-eval { getconf_f "$path/etc/ars-update.conf", @getopt_options };
+eval { getconf_f "$path/etc/ars.conf", @getopt_options };
 
 # and command-line overrides them all
 getopt @getopt_options;
