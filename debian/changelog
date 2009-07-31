@@ -1,3 +1,9 @@
+apt-repository-simple (0.17) feisty; urgency=low
+
+  * Fix deadlocks and umask issues
+
+ -- Sam Vilain <sam.vilain@catalyst.net.nz>  Fri, 31 Jul 2009 15:44:09 +1200
+
 apt-repository-simple (0.16) feisty; urgency=low
 
   * Allow in-repository configuration of ars-update
