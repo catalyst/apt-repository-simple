@@ -400,9 +400,11 @@ FILE LOCATION\n";
 	    # for getting back MD5 and SHA1 sums
 	    pipe(PARENT_RDR, CHILD_WTR);
 
-	    if (my $pid = open PACKAGES, "|-") {
+            pipe(PACKAGES_WTR, PACKAGES_RDR);
+	    if (my $pid = fork()) {
+		close PACKAGES_RDR;
 		if (my $pid2 = fork()) {
-		    close PACKAGES;
+		    close PACKAGES_WTR;
 		    close CHILD_WTR;
 		    # this process collects SHA1 and MD5 sums and filesizes
 		    while (<PARENT_RDR>) {
@@ -422,7 +424,7 @@ FILE LOCATION\n";
 			next unless $group eq "all" or
 			    ($pkgs{$pkg}{groups} and
 			     $pkgs{$pkg}{groups}->includes($group));
-			print PACKAGES map {
+			print PACKAGES_WTR map {
 			    defined($_) or warn "bah";
 			    $md5->add($_);
 			    $sha1->add($_);
@@ -443,6 +445,8 @@ FILE LOCATION\n";
 	    } else {
 
 		# child - sees Packages content on STDIN.
+		open STDIN, "<&PACKAGES_RDR";
+		close PACKAGES_WTR;
 		# This process does a "tee", as well as summing the
 		# Packages file.
 		my $md5 = Digest::MD5->new();
