@@ -1,3 +1,9 @@
+apt-repository-simple (0.18) feisty; urgency=low
+
+  * Fix more 'brown paper bag' type bugs - bump version number this time
+
+ -- Sam Vilain <sam.vilain@catalyst.net.nz>  Mon, 03 Aug 2009 18:11:09 +1200
+
 apt-repository-simple (0.17) feisty; urgency=low
 
   * Fix deadlocks and umask issues
