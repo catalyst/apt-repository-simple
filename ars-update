@@ -402,7 +402,7 @@ FILE LOCATION\n";
 	    # for getting back MD5 and SHA1 sums
 	    pipe(PARENT_RDR, CHILD_WTR);
 
-            pipe(PACKAGES_WTR, PACKAGES_RDR);
+            pipe(PACKAGES_RDR, PACKAGES_WTR);
 	    if (my $pid = fork()) {
 		close PACKAGES_RDR;
 		if (my $pid2 = fork()) {
