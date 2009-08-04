@@ -191,7 +191,7 @@ for my $dir (@dirs) {
     }
 
     find(sub {
-	return if m{^(\.\.?|.*\.(yml|pm3|changes|tar.gz|dsc|diff.gz|groups))$};
+	return if m{^(\.\.?|.*\.(yml|pm3|changes|tar.gz|dsc|diff.gz|groups|new))$};
 	(my $rel_filename = $File::Find::name) =~ s{^\./*}{};
 	if ( -f ) {
 	    my ($pkg, $vers, $arch) = m{(.*)_(.*)_(.*).deb}
