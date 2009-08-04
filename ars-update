@@ -258,7 +258,9 @@ for my $dir (@dirs) {
     }, $dir);
 
     if ($dirty) {
-        nstore reverse($statefile, \%pkgs)
+        nstore \%pkgs, "$statefile.new";
+	rename "$statefile.new", $statefile
+		or barf "rename($statefile.new, $statefile) failed; $!";
     }
     mutter("$dir: $dirty package(s) updated");
 }
@@ -266,7 +268,8 @@ for my $dir (@dirs) {
 
 for my $dist ( (set(keys %dists) + set(keys %dist_dirs))->members ) {
 
-    my $release = eval { retrieve 'dists/$dist/Release.pm3' } || [];
+    my $Release = "dists/$dist/Release.pm3";
+    my $release = eval { retrieve $Release } || [];
     my $dirty;
     my %done_contents;
 
@@ -304,7 +307,9 @@ for my $dist ( (set(keys %dists) + set(keys %dist_dirs))->members ) {
 	my %pkgs;
 	( -d "dists" ) || _mkdir("dists", $perms);
 	( -d "dists/$dist" ) || _mkdir("dists/$dist", $perms);
-	open CONTENTS, "| gzip > dists/$dist/Contents-$arch.gz";
+	my $Contents = "dists/$dist/Contents-$arch.gz";
+	open CONTENTS, "| gzip > $Contents.new";
+	$files->insert($Contents);
 	print CONTENTS "Install the apt-file package to automatically search this file.
 FILE LOCATION\n";
 
@@ -491,7 +496,9 @@ FILE LOCATION\n";
 	}
 
 	mutter "preparing Release file for $dist";
-	nstore $release, "dists/$dist/Release.pm3";
+	nstore $release, "$Release.new";
+	rename "$Release.new", $Release
+		or barf "rename($Release.new, $Release) failed; $!";
     }
 
     my ($conf_origin, $conf_label, $conf_desc) = @{{
