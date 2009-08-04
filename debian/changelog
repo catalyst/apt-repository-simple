@@ -1,3 +1,9 @@
+apt-repository-simple (0.19) feisty; urgency=low
+
+  * Fix another permissions-related/umask problem with ars-update
+
+ -- Sam Vilain <sam.vilain@catalyst.net.nz>  Tue, 04 Aug 2009 15:55:56 +1200
+
 apt-repository-simple (0.18) feisty; urgency=low
 
   * Fix more 'brown paper bag' type bugs - bump version number this time
