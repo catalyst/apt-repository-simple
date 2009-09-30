@@ -1,3 +1,9 @@
+apt-repository-simple (0.20) feisty; urgency=low
+
+  * Permission denied... bane of this program's existence!
+
+ -- Sam Vilain <sam.vilain@catalyst.net.nz>  Wed, 30 Sep 2009 18:21:43 +1300
+
 apt-repository-simple (0.19) feisty; urgency=low
 
   * Fix another permissions-related/umask problem with ars-update
