@@ -258,6 +258,7 @@ for my $dir (@dirs) {
     }, $dir);
 
     if ($dirty) {
+	unlink("$statefile.new");
         nstore \%pkgs, "$statefile.new";
 	rename "$statefile.new", $statefile
 		or barf "rename($statefile.new, $statefile) failed; $!";
@@ -308,6 +309,7 @@ for my $dist ( (set(keys %dists) + set(keys %dist_dirs))->members ) {
 	( -d "dists" ) || _mkdir("dists", $perms);
 	( -d "dists/$dist" ) || _mkdir("dists/$dist", $perms);
 	my $Contents = "dists/$dist/Contents-$arch.gz";
+	unlink("$Contents.new");
 	open CONTENTS, "| gzip > $Contents.new";
 	$files->insert($Contents);
 	print CONTENTS "Install the apt-file package to automatically search this file.
@@ -496,6 +498,7 @@ FILE LOCATION\n";
 	}
 
 	mutter "preparing Release file for $dist";
+	unlink("$Release.new");
 	nstore $release, "$Release.new";
 	rename "$Release.new", $Release
 		or barf "rename($Release.new, $Release) failed; $!";
