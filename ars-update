@@ -237,7 +237,8 @@ for my $dir (@dirs) {
 		    $superceded->insert($rel_filename);
 		}
 	    }
-	    if (!$pkgs{$pkg} or $force_rescan) {
+	    if (!$pkgs{$pkg} or $force_rescan or
+                (!$pkgs{$pkg}{digests} && ($force_regen=1))) {
 		$dirty++;
 		mutter "adding $pkg from $rel_filename";
                 my $digests;
