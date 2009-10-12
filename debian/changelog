@@ -1,3 +1,10 @@
+apt-repository-simple (0.22) feisty; urgency=low
+
+  * Fix some problems caused by no Digest::SHA installed
+  * Add Recommends: libdigest-sha-perl
+
+ -- Sam Vilain <sam.vilain@catalyst.net.nz>  Mon, 12 Oct 2009 19:59:11 +1300
+
 apt-repository-simple (0.21) feisty; urgency=low
 
   * Add source package, SHA256 support
