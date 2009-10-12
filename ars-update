@@ -592,13 +592,14 @@ Description: ${\( $desc || $conf_desc || $def_desc )}
 ";
     for my $line (@$release) {
 	my ($type, $digest, $length, $filename) = split ":", $line;
+        next unless $digest;
 	chomp($filename);
 	$sums{$type}{$filename} = [ $digest, $length ];
 	$files->insert($filename)
 	    if ( -e "$filename.new" );
     }
     for my $type (qw(MD5Sum SHA1 SHA256)) {
-      next unless $sums{$type};
+      next unless $sums{$type} and keys %{$sums{$type}};
 	print RELEASE "$type:\n";
 	for my $filename (sort keys %{ $sums{$type} }) {
 	    my ($digest, $length) = @{ $sums{$type}{$filename} };
@@ -664,6 +665,7 @@ sub display {
         next unless $info->{digests}{$hash};
         my $heading = ($hash eq "MD5" ? "Files"
                        : "Checksums-".ucfirst(lc($hash)));
+        next unless $info{$heading};
         push @rv, $heading, ":\n";
         push @rv, " ", $info->{digests}{$hash}, " ", $info->{size},
           $shortname, "\n";
