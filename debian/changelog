@@ -1,3 +1,10 @@
+apt-repository-simple (0.21) feisty; urgency=low
+
+  * Add source package, SHA256 support
+  * Squash a warning when not using a keyring
+
+ -- Sam Vilain <sam.vilain@catalyst.net.nz>  Mon, 12 Oct 2009 19:14:28 +1300
+
 apt-repository-simple (0.20) feisty; urgency=low
 
   * Permission denied... bane of this program's existence!
