@@ -928,7 +928,8 @@ sub release_lines {
   my @rv;
   for ( qw(MD5Sum SHA1 SHA256) ) {
     push @rv, join(":", $_ => $hexdigests->{$_} =>
-                   $digest->{length} => $filename)."\n";
+                   $digest->{length} => $filename)."\n"
+                     if $hexdigests->{$_};
   }
   wantarray ? @rv : \@rv;
 }
