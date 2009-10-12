@@ -5,6 +5,8 @@ Build-Depends: debhelper (>= 5)
 Build-Depends-Indep: perl (>= 5.8.0-7)
 Maintainer: Sam Vilain <samv@catalyst.net.nz>
 Standards-Version: 3.7.3
+Vcs-Git: git://git.catalyst.net.nz/apt-repository-simple.git
+Vcs-Browser: http://git.catalyst.net.nz/gw?p=apt-repository-simple.git
 
 Package: apt-repository-simple
 Architecture: all
