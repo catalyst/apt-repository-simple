@@ -44,7 +44,7 @@ while (my $filename = shift) {
         $files{"pool/$release-$arch/$basename"} = $filename;
     }
     else {
-        $files{"pool/$release-sources/$basename"} = $filename;
+        $files{"pool/$release-source/$basename"} = $filename;
     }
 }
 
