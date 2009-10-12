@@ -8,8 +8,13 @@ use Storable qw(nstore retrieve);
 use File::Find qw(find);
 use Set::Object 1.15, qw(set);
 use List::Util qw(max);
-use Digest::SHA1;
 use Digest::MD5;
+use Digest::SHA1;
+BEGIN{
+  eval {
+    require Digest::SHA;
+  }
+}
 use Date::Manip qw(UnixDate);
 use IO::Handle;
 use YAML::Syck qw(Dump);
@@ -229,9 +234,21 @@ for my $dir (@dirs) {
 	    if (!$pkgs{$pkg} or $force_rescan) {
 		$dirty++;
 		mutter "adding $pkg from $rel_filename";
-		my $md5sum = `md5sum $_`;
-		($md5sum) = ($md5sum =~ m{^(\w+)});
-		my $filename = $_;
+                my $digests;
+                my $filename = $_;
+                {
+                  open FILE, "<$filename"
+                    or die "failed to open $filename for reading; $!";
+                  binmode FILE;
+                  local($/)=\((stat FILE)[11]||4096);
+                  my $digest = Digest::All->new();
+                  while ( <FILE> ) {
+                    $digest->add($_);
+                  }
+                  stat FILE;
+                  close FILE;
+                  $digests = $digest->hexdigests;
+                }
 		my @groups;
 		#stat $rel_filename;
 		my $mtime = ((stat _)[9]);
@@ -248,7 +265,7 @@ for my $dir (@dirs) {
 		     version => $vers,
 		     mtime => $mtime,
 		     size => $size,
-		     md5sum => $md5sum,
+                     digests => $digests,
 		     info => grok_dpkg_info($filename),
 		     md5sums => get_md5sums($filename),
 		     groups => set(@groups),
@@ -360,18 +377,10 @@ FILE LOCATION\n";
 	    print RELEASE $release_data;
 	    close RELEASE;
 	    {
-		my $md5 = Digest::MD5->new();
-		my $sha1 = Digest::SHA1->new();
-		$md5->add($release_data);
-		$sha1->add($release_data);
-		my $length = length $release_data;
-		push @$release,
-		    (
-		     (join(":","MD5Sum",$md5->hexdigest,
-			   $length,"$dir/Release").      "\n"),
-		     (join(":","SHA1",$sha1->hexdigest,
-			   $length,"$dir/Release").      "\n")
-		    );
+              my $digest = Digest::All->new;
+              $digest->add($release_data);
+              my $length = length $release_data;
+              push @$release, $digest->release_lines("$dir/Release");
 	    }
 
 	    my $Packages = "$dir/Packages";
@@ -386,22 +395,12 @@ FILE LOCATION\n";
 		    local($/)=\((stat _)[11]||4096);
 		    open FILE, "<$file" or die $!;
 		    binmode FILE;
-		    my $md5 = Digest::MD5->new();
-		    my $sha1 = Digest::SHA1->new();
-		    my $length = 0;
-		    while ( read FILE, $_, 1024 ) {
-			$md5->add($_);
-			$sha1->add($_);
-			$length += length;
+                    my $digest = Digest::All->new();
+		    while ( <FILE> ) {
+                      $digest->add($_);
 		    }
 		    close FILE;
-		    push @$release,
-			(
-			 (join(":","MD5Sum",$md5->hexdigest,
-			       $length,"$file").      "\n"),
-			 (join(":","SHA1",$sha1->hexdigest,
-			       $length,"$file").      "\n")
-			);
+		    push @$release, $digest->release_lines($file);
 		}
 		next;
 	    }
@@ -425,9 +424,8 @@ FILE LOCATION\n";
 		} else {
 		    # this process writes the Packages contents
 		    my $n;
-		    my $md5 = Digest::MD5->new();
-		    my $sha1 = Digest::SHA1->new();
-		    my $length = 0;
+                    my $digest = Digest::All->new();
+                    unlink("$Packages.new");
 		    open REALPACKAGES, ">$Packages.new" or barf("open($Packages.new) failed; $!");
 		    for my $pkg (sort keys %pkgs) {
 			next unless $group eq "all" or
@@ -435,18 +433,14 @@ FILE LOCATION\n";
 			     $pkgs{$pkg}{groups}->includes($group));
 			print PACKAGES_WTR map {
 			    defined($_) or warn "bah";
-			    $md5->add($_);
-			    $sha1->add($_);
-			    $length += length($_);
+			    $digest->add($_);
 			    print REALPACKAGES $_;
 			    $_
-			} ($n++ ? "\n" : ""), display($pkgs{$pkg});
+			} ($n++ ? "\n" : ""), display($pkgs{$pkg}, "pool/$dir");
 		    }
 		    close REALPACKAGES;
-		    close PACKAGES;
-		    print CHILD_WTR
-			join("", (join(":","MD5Sum",$md5->hexdigest,$length,"$Packages"), "\n",
-				  join(":","SHA1",$sha1->hexdigest,$length,"$Packages"), "\n"));
+		    #close PACKAGES;
+		    print CHILD_WTR $digest->release_lines($Packages);
 		    exit(0);
 		}
 	    } elsif (!defined $pid) {
@@ -459,9 +453,7 @@ FILE LOCATION\n";
 		# This process just does a "tee", but we create
 		# md5/sha1 objects for the children to summing the
 		# compressed versions
-		my $md5 = Digest::MD5->new();
-		my $sha1 = Digest::SHA1->new();
-		my $length = 0;
+                my $digest = Digest::All->new();
 		my %fh;
 		for my $z (@z) {
 		    if (my $z_pid = open $fh{$z}, "|-") {
@@ -475,21 +467,17 @@ FILE LOCATION\n";
 			} else {
 			    open STDOUT, ">$Packages.$z.new" or barf $!;
 			    while (read STDIN, $_, 1024) {
-				$length += length $_;
-				$md5->add($_);
-				$sha1->add($_);
-				print $_;
+                              $digest->add($_);
+                              print $_;
 			    }
-			    print CHILD_WTR
-				join("", (join(":","MD5Sum",$md5->hexdigest,$length,"$Packages.$z"), "\n",
-					  join(":","SHA1",$sha1->hexdigest,$length,"$Packages.$z"), "\n"));
+			    print CHILD_WTR $digest->release_lines("$Packages.$z");
 			    exit(0);
 			}
 		    }
 		}
 		close CHILD_WTR;
 		while (<STDIN>) {
-		    $length += length $_;
+		    #$length += length $_;
 		    for my $i (@z) { print { $fh{$i} } $_ };
 		}
 		exit(0);
@@ -529,7 +517,8 @@ Description: ${\( $desc || $conf_desc || $def_desc )}
 	$files->insert($filename)
 	    if ( -e "$filename.new" );
     }
-    for my $type (qw(MD5Sum SHA1)) {
+    for my $type (qw(MD5Sum SHA1 SHA256)) {
+      next unless $sums{$type};
 	print RELEASE "$type:\n";
 	for my $filename (sort keys %{ $sums{$type} }) {
 	    my ($digest, $length) = @{ $sums{$type}{$filename} };
@@ -577,7 +566,10 @@ sub display {
 
     push @rv, "Filename: ", $info->{filename}, "\n";
     push @rv, "Size: ", $info->{size}, "\n";
-    push @rv, "MD5sum: ", $info->{md5sum}, "\n";
+    push @rv, "MD5sum: ", $info->{digests}{MD5}, "\n";
+    push @rv, "SHA1: ", $info->{digests}{SHA1}, "\n";
+    push @rv, "SHA256: ", $info->{digests}{SHA256}, "\n"
+      if $info->{digests}{SHA256};
 
     push @rv, $dpkg_info->[$#$dpkg_info-1], ": ",
 	$dpkg_info->[$#$dpkg_info],"\n";
@@ -738,6 +730,47 @@ sub _mkdir {
 	    chmod($perms, $dir) or barf "chmod($perms, $dir) failed; $!";
     	}
     }
+}
+
+package Digest::All;
+sub new {
+  my $sha256 = eval { Digest::SHA->new(256) };
+  return bless { MD5 => Digest::MD5->new(),
+                 SHA1 => Digest::SHA1->new(),
+                 ($sha256 ? (SHA256 => $sha256) : () ),
+                 length => 0,
+         }, shift;
+}
+
+sub add {
+  my $digest = shift;
+  my $block = shift;
+  for my $eater ( values %$digest ) {
+    $eater->add($block) if ref $eater;
+  }
+  $digest->{length} += length $block;
+}
+
+sub hexdigests {
+  my $digest = shift;
+  my %rv;
+  while ( my ($alg, $eater) = each %$digest ) {
+    $rv{$alg} = $eater->hexdigest if ref $eater;
+  }
+  \%rv;
+}
+
+sub release_lines {
+  my $digest = shift;
+  my $filename = shift;
+  my $hexdigests = $digest->hexdigests;
+  $hexdigests->{MD5Sum} = delete $hexdigests->{MD5};
+  my @rv;
+  for ( qw(MD5Sum SHA1 SHA256) ) {
+    push @rv, join(":", $_ => $hexdigests->{$_} =>
+                   $digest->{length} => $filename)."\n";
+  }
+  wantarray ? @rv : \@rv;
 }
 
 __END__
