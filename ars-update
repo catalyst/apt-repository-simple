@@ -198,14 +198,18 @@ for my $dir (@dirs) {
     }
 
     find(sub {
-	return if m{^(\.\.?|.*\.(yml|pm3|changes|tar.gz|dsc|diff.gz|groups|new))$};
+	return if m{^(\.\.?|.*\.(yml|pm3|tar.gz|changes|diff.gz|groups|new))$};
 	(my $rel_filename = $File::Find::name) =~ s{^\./*}{};
 	if ( -f ) {
-	    my ($pkg, $vers, $arch) = m{(.*)_(.*)_(.*).deb}
+	    my ($pkg, $vers, $arch, $is_src)
+              = m{^([^_]*)_([^_]*)(?:_([^_]*)\.deb|\.(dsc))$}
 	        or do {
-	        moan "file $rel_filename doesn't match debian form!";
-		return;
-	    };
+                  moan "file $rel_filename doesn't match debian form!";
+                  return;
+                };
+            if ( $is_src ) {
+              $arch = "source";
+            }
 	    if ($pkgs{$pkg}) {
 		# ignore epoch for now
 		if ( $rel_filename eq $pkgs{$pkg}{filename} ) {
@@ -261,6 +265,71 @@ for my $dir (@dirs) {
 			unlink "$filename.groups";
 		    }
 		}
+                my $info = grok_dpkg_info($filename);
+                my %source_pieces;
+                if ( $is_src ) {
+                  # verify the source files exist and have correct checksum...
+                  my $info_h = { @$info };
+                  my %others;
+                  for my $hash ( qw(SHA1 SHA256 MD5) ) {
+                    my $heading = ($hash eq "MD5" ? "Files"
+                                   : "Checksums-".ucfirst(lc($hash)));
+                    next unless $info_h->{$heading};
+                    my @lines = split "\n", $info_h->{$heading};
+                    for my $line ( @lines ) {
+                      my ($hexdigest, $size, $piece_filename)
+                        = split " ", $line;
+                      if ( $hash ne "MD5" ) {
+                        $others{$piece_filename}{$hash} = $hexdigest;
+                      } else {
+                        my $bad;
+                        $source_pieces{$piece_filename}++;
+                        if ( ! -f $piece_filename ) {
+                          moan("$piece_filename not found!");
+                          $bad = 1;
+                        }
+                        elsif ( (-s _) != $size ) {
+                          moan("$piece_filename wrong size!");
+                          $bad = 1;
+                        }
+                        elsif ( ! open SRC_PART, "<$piece_filename" ) {
+                          moan "failed to open $piece_filename for reading; $!";
+                          $bad = 1;
+                        }
+                        else {
+                          binmode SRC_PART;
+                          local($/)=\((stat SRC_PART)[11]||4096);
+                          my $digest = Digest::All->new();
+                          while ( <SRC_PART> ) {
+                            $digest->add($_);
+                          }
+                          close SRC_PART;
+                          my $digests = $digest->hexdigests;
+                          my $o = $others{$piece_filename};
+                          if ( $digests->{MD5} ne $hexdigest ) {
+                            moan "MD5 mismatch on $piece_filename";
+                            $bad = 1;
+                          }
+                          elsif ( $o->{SHA1} and $digests->{SHA1} and
+                                  $digests->{SHA1} ne $o->{SHA1} ) {
+                            moan "SHA1 mismatch on $piece_filename ($o->{SHA1} vs $digests->{SHA1})!  But both files have $hexdigest MD5!  Wow!";
+                            $bad = 1;
+                          }
+                          elsif ( $o->{SHA256} and $digests->{SHA256} and
+                                  $digests->{SHA256} ne $o->{SHA256} ) {
+                            moan "SHA256 mismatch on $piece_filename!  Holy Cow!  A real SHA1 collision!  Someone call Bruce Schneier!";
+                            $bad = 1;
+                          }
+                        }
+                        if ( $bad ) {
+                          moan("not indexing $pkg ($dir)");
+                          delete $pkgs{$pkg};
+                          return;
+                        }
+                      }
+                    }
+                  }
+                }
 		$pkgs{$pkg} =
 		    {
 		     filename => $rel_filename,
@@ -268,8 +337,10 @@ for my $dir (@dirs) {
 		     mtime => $mtime,
 		     size => $size,
                      digests => $digests,
-		     info => grok_dpkg_info($filename),
-		     md5sums => get_md5sums($filename),
+		     info => $info,
+		     ($is_src
+                      ? (pieces => [sort keys %source_pieces])
+                      : (md5sums => get_md5sums($filename))),
 		     groups => set(@groups),
 		    };
 	    }
@@ -297,7 +368,7 @@ for my $dist ( (set(keys %dists) + set(keys %dist_dirs))->members ) {
     my $files = set();
     my $every_group = set();
 
-    unless ( grep !/^(sources|all)/, keys %{ $dist_dirs{$dist} } ) {
+    unless ( grep !/^(source|all)/, keys %{ $dist_dirs{$dist} } ) {
 	my @arches = $all_arches->members;
 	if ( ! @arches ) {
 	    chomp(my $DEB_HOST_ARCH =
@@ -313,50 +384,56 @@ for my $dist ( (set(keys %dists) + set(keys %dist_dirs))->members ) {
     for my $arch ( $all_arches->members ) {
 
 	# FIXME - write proper Sources files
-	next if $arch eq 'sources';
+        my $source = $arch =~ /sources?/;
 
 	my @files = grep { -e }
 	    map { "$_/packages.pm3" }
 		@{ $dist_dirs{$dist}{$arch}||[] },
-		    @{ $dists{$dist} },
-			@indep_dirs;
+                  ($source ? () : ( @{ $dists{$dist} }, @indep_dirs ));
 
-	mutter("preparing Contents files for $dist-$arch");
 	my @dirs = map { retrieve $_ } @files;
-
-	my %pkgs;
 	( -d "dists" ) || _mkdir("dists", $perms);
 	( -d "dists/$dist" ) || _mkdir("dists/$dist", $perms);
-	my $Contents = "dists/$dist/Contents-$arch.gz";
-	unlink("$Contents.new");
-	open CONTENTS, "| gzip > $Contents.new";
-	$files->insert($Contents);
-	print CONTENTS "Install the apt-file package to automatically search this file.
-FILE LOCATION\n";
 
-	for my $dir (@dirs) {
-	    while (my ($pkg, $info) = each %$dir) {
-		if ($pkgs{$pkg}) {
-		    moan "package $pkg appears more than once in dirs for $dist-$arch";
-		} else {
-		    $pkgs{$pkg} = $info;
-		    my $md5sums = $info->{md5sums};
-		    my @groups = ($info->{groups}||set())->members;
-		    my ($primary_group) = ( (sort @groups), "all");
-		    for (my $i = 0; $i < $#$md5sums; $i+=2) {
-			print CONTENTS $md5sums->[$i], " ", "$primary_group/$pkg", "\n";
-		    }
-		}
-	    }
-	}
-	close CONTENTS;
-	my $all_groups = set(map { ($_->{groups}||set())->members
-			       } values %pkgs );
+        unless ( $source ) {
+          mutter("preparing Contents files for $dist-$arch");
+
+          my $Contents = "dists/$dist/Contents-$arch.gz";
+          unlink("$Contents.new");
+          open CONTENTS, "| gzip > $Contents.new";
+          $files->insert($Contents);
+          print CONTENTS "Install the apt-file package to automatically search this file.
+FILE LOCATION\n";
+        }
+
+        my %pkgs;
+	my $all_groups = set();
+        for my $dir (@dirs) {
+          while (my ($pkg, $info) = each %$dir) {
+            if ($pkgs{$pkg}) {
+              moan "package $pkg appears more than once in dirs for $dist-$arch";
+            } else {
+              $pkgs{$pkg} = $info;
+              my @groups = ($info->{groups}||set())->members;
+              $all_groups->insert(@groups);
+              unless ( $source ) {
+                my $md5sums = $info->{md5sums};
+                my ($primary_group) = ( (sort @groups), "all");
+                for (my $i = 0; $i < $#$md5sums; $i+=2) {
+                  print CONTENTS $md5sums->[$i], " ", "$primary_group/$pkg", "\n";
+                }
+              }
+            }
+          }
+        }
+        close CONTENTS unless $source;
+
 	$every_group += $all_groups;
 
 	for my $group ( "all", $all_groups->members ) {
 
-	    my $dir = "dists/$dist/$group/binary-$arch";
+	    my $dir = "dists/$dist/$group/"
+              .($source ? "source" : "binary-$arch");
 
 	    ( -e $dir ) || _mkdir($dir, $perms);
 
@@ -385,7 +462,7 @@ FILE LOCATION\n";
               push @$release, $digest->release_lines("$dir/Release");
 	    }
 
-	    my $Packages = "$dir/Packages";
+	    my $Packages = "$dir/".($source?"Sources":"Packages");
 
 	    my $max = (max map { ((stat $_)[9]) } @files) ;
 	    if ( ($max||0) < ((stat $Packages)[9]||0) and !$force_regen ) {
@@ -507,7 +584,7 @@ Label: ${\( $label || $conf_label || $def_label )}
 Suite: ${\( $suites{$dist} || $dist )}
 Codename: $dist
 Date: ".UnixDate("now", "%g")."
-Architectures: ".join(" ",( grep { $_ ne "sources" }
+Architectures: ".join(" ",( grep { $_ !~ /source/ }
 			    keys %{ $dist_dirs{$dist} } ))."
 Components: all @{[ sort $every_group->members ]}
 Description: ${\( $desc || $conf_desc || $def_desc )}
@@ -560,21 +637,65 @@ exit 0;
 
 sub display {
     my $info = shift;
-    my $dpkg_info = $info->{info};
+    my $dir = shift;
+    my $dpkg_info = $info->{info}
+      or do {
+        say("no dpkg info!  Got:".Dump($info));
+      };
     my @rv;
-    for (my $i = 0; ($i * 2)+2 < @$dpkg_info; $i++) {
-	push @rv, $dpkg_info->[($i*2)], ": ", $dpkg_info->[($i*2)+1], "\n";
+    if ( $info->{filename} =~ m{\.dsc$} ) {
+      # need to do something different
+      my %info = @$dpkg_info;
+      delete $info{Hash};
+      my $x = sub {
+        push @rv, "$_: ", delete($info{$_}), "\n"
+          for grep { exists $info{$_} } @_;
+      };
+      push @rv, "Package: ", delete $info{Source}, "\n";
+      $x->(qw(Binary Version));
+      push @rv, "Priority: optional\n";
+      push @rv, "Section: optional\n";
+      $x->(qw(Maintainer Build-Depends Build-Depends-Indep
+              Architecture Standards-Version Format));
+      push @rv, "Directory: ", $dir, "\n";
+      (my $shortname = $info->{filename}) =~ s{.*/}{};
+      for my $hash ( qw(MD5 SHA1 SHA256) ) {
+        next unless $info->{digests}{$hash};
+        my $heading = ($hash eq "MD5" ? "Files"
+                       : "Checksums-".ucfirst(lc($hash)));
+        push @rv, $heading, ":\n";
+        push @rv, " ", $info->{digests}{$hash}, " ", $info->{size},
+          $shortname, "\n";
+        push @rv, map { (" ", $_, "\n") } split "\n",
+          delete $info{$heading};
+      }
+      for my $extra ( sort keys %info ) {
+        my $data = $info{$extra};
+        push @rv, $extra, ":";
+        if ( $data =~ /\n/ ) {
+          push @rv, "\n";
+          push @rv, map { (" ", $_, "\n") } split "\n", $data;
+        }
+        else {
+          push @rv, " ", $data, "\n";
+        }
+      }
     }
+    else {
+      for (my $i = 0; ($i * 2)+2 < @$dpkg_info; $i++) {
+	push @rv, $dpkg_info->[($i*2)], ": ", $dpkg_info->[($i*2)+1], "\n";
+      }
 
-    push @rv, "Filename: ", $info->{filename}, "\n";
-    push @rv, "Size: ", $info->{size}, "\n";
-    push @rv, "MD5sum: ", $info->{digests}{MD5}, "\n";
-    push @rv, "SHA1: ", $info->{digests}{SHA1}, "\n";
-    push @rv, "SHA256: ", $info->{digests}{SHA256}, "\n"
-      if $info->{digests}{SHA256};
+      push @rv, "Filename: ", $info->{filename}, "\n";
+      push @rv, "Size: ", $info->{size}, "\n";
+      push @rv, "MD5sum: ", $info->{digests}{MD5}, "\n";
+      push @rv, "SHA1: ", $info->{digests}{SHA1}, "\n";
+      push @rv, "SHA256: ", $info->{digests}{SHA256}, "\n"
+        if $info->{digests}{SHA256};
 
-    push @rv, $dpkg_info->[$#$dpkg_info-1], ": ",
+      push @rv, $dpkg_info->[$#$dpkg_info-1], ": ",
 	$dpkg_info->[$#$dpkg_info],"\n";
+    }
 
     if ( grep { !defined } @rv ) {
 	moan "display for $info->{filename} returns: ";
@@ -588,25 +709,61 @@ sub display {
 
 sub grok_dpkg_info {
     my $filename = shift;
+    my @data;
+    if ( $filename =~ m{\.deb$} ) {
+      my $data = capture(qw(dpkg -I), $filename);
 
-    my $data = capture(qw(dpkg -I), $filename);
-
-    scalar($data =~ m{\A.*^ Package: (\S+)\n}msg);
-    my @data = ( "Package" => $1 );
-    while ($data =~ m{\G (\S+): ((?-s:.*(\n  .*)*))\n}sg) {
+      scalar($data =~ m{\A.*^ Package: (\S+)\n}msg);
+      @data = ( "Package" => $1 );
+      while ($data =~ m{\G (\S+): ((?-s:.*(\n  .*)*))\n}sg) {
         my ($what, $value) = ($1, $2);
 	$value =~ s{^ }{}mg;
 	chomp($value);
 	push @data, $what => $value;
+      }
+    }
+    elsif ( $filename =~ m{\.dsc$} ) {
+      open DESC, "<$filename" or die $!;
+      my $field;
+      my %data;
+      while ( <DESC> ) {
+        if ( m{^(\S+):\s*(.*)} ) {
+          $field = $1;
+          $data{$field} = $2;
+        }
+        elsif ( m{^\s+(\S.*)} ) {
+          if ( $field ) {
+            $data{$field} .= (length($data{$field})? "\n" : ""). "$1";
+          }
+        }
+        else {
+          undef($field);
+        }
+      }
+      @data = %data;
+    }
+    else {
+      die;
     }
     return \@data;
 }
 
 sub get_md5sums {
     my $filename = shift;
-    my ($err, @data) = capture_err(qw(dpkg -I), $filename, "md5sums");
-    return undef if $err;
-    my @sums = map { chomp; m/(\S+)\s*(.*)/ && ($2 => $1) } @data;
+    my @sums;
+    if ( $filename =~ m{\.deb$} ) {
+      my ($err, @data) = capture_err(qw(dpkg -I), $filename, "md5sums");
+      return undef if $err;
+      @sums = map { chomp; m/(\S+)\s*(.*)/ && ($2 => $1) } @data;
+    }
+    elsif ( $filename =~ m{\.dsc$} ) {
+      open DESC, "<$filename" or die $!;
+      while ( <DESC> ) {
+        if ( /Files:/../^\s*$/ ) {
+          m{^\s+([a-f0-9]+)\s+\d+\s+(\S.*)} && push(@sums, $2, $1);
+        }
+      }
+    }
     return \@sums;
 }
 
