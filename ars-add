@@ -26,6 +26,8 @@ $release or abort "need a release to add to";
 ( -d $path ) or abort "target path $path does not exist!";
 
 my $ok_types = set(qw( orig.tar.gz tar.gz dsc diff.gz changes deb ));
+my $ok_types_re = "(?:".join("|", $ok_types->members).")";
+$ok_types_re = qr/$ok_types_re/;
 
 my %files;
 while (my $filename = shift) {
@@ -34,11 +36,8 @@ while (my $filename = shift) {
     (my $basename = $filename) =~ s{.*/}{};
 
     my ($package, $version, $arch, $type)
-        = $basename =~ m{^([^_]*)_([^_]*)(?:_([^\.]*))?\.(.*)}
+        = $basename =~ m{^([^_]*)_([^_]*)(?:_([^\.]*))?\.($ok_types_re)$}
             or (moan("filename $filename doesn't look right"), next);
-
-    $ok_types->includes($type) or
-       (moan("bad extension '$type' on $filename"), next);
 
     if ($type eq "deb") {
         $files{"pool/$release-$arch/$basename"} = $filename;
