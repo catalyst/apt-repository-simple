@@ -1,3 +1,9 @@
+apt-repository-simple (0.24) feisty; urgency=low
+
+  * Sources file was missing a space
+
+ -- Sam Vilain <sam.vilain@catalyst.net.nz>  Fri, 04 Dec 2009 15:36:00 +1300
+
 apt-repository-simple (0.23) feisty; urgency=low
 
   * Fix a glaring bug in ars-add with source packages
