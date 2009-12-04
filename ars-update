@@ -668,7 +668,7 @@ sub display {
         next unless $info{$heading};
         push @rv, $heading, ":\n";
         push @rv, " ", $info->{digests}{$hash}, " ", $info->{size},
-          $shortname, "\n";
+          " ", $shortname, "\n";
         push @rv, map { (" ", $_, "\n") } split "\n",
           delete $info{$heading};
       }
