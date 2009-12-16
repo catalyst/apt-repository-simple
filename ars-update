@@ -49,6 +49,7 @@ my $clean_old;
 my $times_not_versions;
 my $signing_key;
 my $keyring;
+my $sec_keyring;
 my $no_gpg_agent;
 my $perms;
 my @gpg_options;
@@ -69,6 +70,7 @@ our @getopt_options =
 	  "no-sign|S" => \$no_sign,
 	  "signing-key|k=s" => \$signing_key,
 	  "keyring|K=s" => \$keyring,
+	  "secret-keyring|secring=s" => \$sec_keyring,
 	  "gpg-option|g=s\@" => \@gpg_options,
 	  "no-agent" => \$no_gpg_agent,
 	 );
@@ -131,8 +133,7 @@ unless ( $no_gpg_agent or $ENV{GPG_AGENT_INFO} ) {
     }
 }
 
-my $sec_keyring;
-if ( $keyring ) {
+if ( $keyring and !$sec_keyring ) {
   ($sec_keyring = $keyring) =~ s{(p)ubring}{secring};
   undef($sec_keyring) unless $1;
 }
@@ -1002,8 +1003,14 @@ the ARS root.
 
 =item B<-K, --keyring=FILE>
 
-Specify the keyring in which to find the private PGP key used for
-signing.
+Specify the keyring in which to find the public PGP key used for
+verifying the signing key is valid.
+
+=item B<--secring, --secret-keyring=FILE>
+
+Specify the secret keyring, in which to find the private PGP key used
+for signing.  This default to the same as the keyring, but with
+C<pubring> replaced with C<secring>.
 
 =item B<-g, --gpg-option=X>
 
@@ -1073,7 +1080,7 @@ The format of this file should be option: value; eg,
   origin: mycompany.com
   label: My Company's Stuff
   shared: 1
-  signing-key: keys/secring.gpg
+  signing-key: 0xCAFEBABE
   keyring: keys/pubring.gpg
 
 =head1 SEE ALSO
