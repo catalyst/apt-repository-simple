@@ -75,6 +75,11 @@ our @getopt_options =
 	  "no-agent" => \$no_gpg_agent,
 	 );
 
+if ( !$no_sign and !$no_gpg_agent and !in_path("gpg-agent") ) {
+	moan "no 'gpg-agent'; assuming --no-agent";
+	$no_gpg_agent = 1;
+}
+
 # get the rest of the options from system default/user config files
 getconf @getopt_options;
 
@@ -893,6 +898,16 @@ sub _mkdir {
 	    chmod($perms, $dir) or barf "chmod($perms, $dir) failed; $!";
     	}
     }
+}
+
+sub in_path {
+	my $binary = shift;
+	for (split ":", $ENV{PATH}) {
+		if ( -x "$_/$binary" ) {
+			return 1;
+		}
+	}
+	0;
 }
 
 package Digest::All;
