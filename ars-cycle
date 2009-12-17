@@ -1,5 +1,7 @@
 #!/usr/bin/perl
 
+#our $VERSION = "__VERSION__";
+
 use Scriptalicious;
 use Set::Object qw(set);
 use Cwd qw(getcwd);

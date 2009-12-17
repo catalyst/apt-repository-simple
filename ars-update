@@ -1,6 +1,8 @@
 #!/usr/bin/perl -w
 #
 
+# our $VERSION = "__VERSION__";
+
 use strict;
 use Scriptalicious qw(1.12);
 #use YAML qw(LoadFile DumpFile Dump);

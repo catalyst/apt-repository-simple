@@ -53,6 +53,7 @@ install-stamp:
 	# Add commands to install the package into debian/$PACKAGE_NAME here
 	mkdir -p $(TMP)/usr/bin
 	cp ars-update ars-add ars-cycle $(TMP)/usr/bin
+	./set-version.pl $(TMP)/usr/bin/ars-*
 
 	touch install-stamp
 
