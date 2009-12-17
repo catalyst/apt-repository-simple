@@ -55,6 +55,7 @@ my $sec_keyring;
 my $no_gpg_agent;
 my $perms;
 my @gpg_options;
+my @sections;
 
 # first, configure just the path..
 getopt_lenient getconf ( "path|p=s" => \$path );
@@ -65,6 +66,7 @@ our @getopt_options =
 	  "origin|o=s" => \$origin,
 	  "label|l=s" => \$label,
 	  "desc|D=s" => \$desc,
+	  "sections|s=s\@" => \@sections,
 	  "clean|c" => \$clean_old,
 	  "newer|n" => \$times_not_versions,
 	  "perms=s" => \$perms,
@@ -160,6 +162,10 @@ my %dist_dirs;
 
 my $superceded = set();
 my $all_arches = set();
+
+my $sections_re = eval {
+	qr/${\( @sections ? join("|",@sections) : "." )}/
+} or abort "invalid regular expression(s): @sections";
 
 for my $dir (@dirs) {
 
@@ -273,6 +279,12 @@ for my $dir (@dirs) {
 		    if ( !@groups ) {
 			unlink "$filename.groups";
 		    }
+		}
+		else {
+		    (my $groups = $rel_filename) =~ s{\Q$dir\E/}{} or die;
+		    (@groups) = split "/", $groups;
+		    pop @groups;
+		    @groups = grep /$sections_re/, @groups;
 		}
                 my $info = grok_dpkg_info($filename);
                 my %source_pieces;
@@ -1005,6 +1017,19 @@ Specify the APT Label.  Similar use to Origin.
 =item B<-D, --desc="Description">
 
 An optional description of the archive.
+
+=item B<-s, --sections="regex">
+
+Specify what sections are valid for package names.  Sections are
+gleaned from the pathname; by default, all of them are valid.  There
+is also a section called C<all> which contains all the packages in
+that dist/arch.
+
+If you are using paths to break up large directories, you'll want to
+explicitly list the sections which are valid here.
+
+You can specify this option multiple times, or pass an array ref in
+the config file.
 
 =item B<-S, --no-sign>
 
