@@ -168,7 +168,7 @@ for my $dir (@dirs) {
     say "processing $dir";
     my ($pool) = ($dir =~ m{.*/(.*)});
 
-    if (my ($dist, $arch) = ($pool =~ m{(.*)-(.*)})) {
+    if (my ($dist, $arch) = ($pool =~ m{(.*)-([^-]*)})) {
 	if ($arch eq "all") {
 	    push @{ $dists{$dist}||=[] }, $dir
 	} else {
