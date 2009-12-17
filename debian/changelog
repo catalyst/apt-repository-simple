@@ -3,8 +3,9 @@ apt-repository-simple (0.25) feisty; urgency=low
   * Add an option to override the secret keyring file
   * Default to --no-agent if gpg-agent is not installed
   * Make ars-* --version work
+  * Place files into sections according to the path
 
- -- Sam Vilain <sam.vilain@catalyst.net.nz>  Thu, 17 Dec 2009 15:50:19 +1300
+ -- Sam Vilain <sam.vilain@catalyst.net.nz>  Thu, 17 Dec 2009 16:39:52 +1300
 
 apt-repository-simple (0.24) feisty; urgency=low
 
