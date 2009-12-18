@@ -49,6 +49,7 @@ my $desc;
 my $no_sign;
 my $clean_old;
 my $times_not_versions;
+my $gnupg_home;
 my $signing_key;
 my $keyring;
 my $sec_keyring;
@@ -72,6 +73,7 @@ our @getopt_options =
 	  "perms=s" => \$perms,
 	  "shared" => sub { $perms = "2775" },
 	  "no-sign|S" => \$no_sign,
+	  "gnupg-home=s" => \$gnupg_home,
 	  "signing-key|k=s" => \$signing_key,
 	  "keyring|K=s" => \$keyring,
 	  "secret-keyring|secring=s" => \$sec_keyring,
@@ -103,6 +105,10 @@ if ($perms) {
 
 if ( $path ) {
     chdir($path) or barf "failed to change to $path; $!";
+}
+
+if ($gnupg_home) {
+    $ENV{GNUPGHOME} = $gnupg_home;
 }
 
 $path = cwd;
@@ -1037,6 +1043,10 @@ Don't try to generate F<.asc> files for the F<Packages> and F<Release>
 files.  These files allow packages to be installed without warning the
 user about them being unsigned - but only if the user also has the key
 used for signing in their APT keyring.  See L<apt-key>.
+
+=item B<--gnupg-home=DIRECTORY>
+
+Specify the home directory for gpg, instead of ~/.gnupg.
 
 =item B<-k, --signing-key=ID>
 
