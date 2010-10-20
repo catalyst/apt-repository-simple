@@ -1,3 +1,9 @@
+apt-repository-simple (0.26) unstable; urgency=low
+
+  * Fix creating directories in the wrong place with ars-cycle.
+
+ -- Andrew Ruthven <puck@catalyst.net.nz>  Wed, 20 Oct 2010 13:55:02 +1300
+
 apt-repository-simple (0.25) feisty; urgency=low
 
   * Add an option to override the secret keyring file
