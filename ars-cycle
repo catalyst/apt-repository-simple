@@ -133,7 +133,7 @@ while ( my $next_oldest = pop @releases ) {
 		     "failed; $!");
 	if ( !@releases ) {
 	    # last time through, re-set up the pool dirs
-	    mkdir("$path/$pool/$rename");
+	    mkdir("$path/pool/$rename");
 	}
     }
 
