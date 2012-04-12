@@ -1,3 +1,9 @@
+apt-repository-simple (0.27) unstable; urgency=low
+
+  * Allow a force mode to ars-cycle so it won't ask questions. 
+
+ -- Andrew Ruthven <puck@catalyst.net.nz>  Thu, 12 Apr 2012 14:22:56 +1200
+
 apt-repository-simple (0.26) unstable; urgency=low
 
   * Fix creating directories in the wrong place with ars-cycle.
