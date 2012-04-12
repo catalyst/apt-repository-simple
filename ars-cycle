@@ -10,11 +10,13 @@ my $path = "/var/www/debian";
 my @releases;
 my $sign;
 my $delete_last;
+my $force_yes;
 
 getopt getconf("path|p=s" => \$path,
 	       "release|r=s@" => \@releases,
 	       "sign|s" => \$sign,
 	       "delete|D" => \$delete_last,
+         "force-yes" => \$force_yes,
 	      );
 
 @releases > 1 or abort "need at least two releases to cycle";
@@ -29,14 +31,22 @@ say("You specified your upgrade cycle is (newest to oldest):\n\n",
 my $newest = $releases[0];
 my @files = files_in_pool($path, $newest, 1);
 
-barf "no packages in $path/pool/$newest-*" unless @files;
+if (! @files) {
+  say "no packages in $path/pool/$newest-*";
+  exit(0);
+}
+
+say("You selected to force yes to all questions, hold onto your seat,\nthis could be bumpy ride!")
+  if $force_yes;
 
 say("Ok, well we found some .debs in the *newest* pool:\n",
     show_a_few(@files));
 
-if ( not prompt_yN("these are ready to become $releases[1]?") ) {
-    say "well, good thing I asked, hey?";
-    exit(1);
+if (! $force_yes) {
+    if ( prompt_yN("these are ready to become $releases[1]?") ) {
+        say "well, good thing I asked, hey?";
+        exit(1);
+    }
 }
 
 say("Ok, so then there's the small matter of what happens to the "
@@ -47,7 +57,7 @@ say("Ok, so then there's the small matter of what happens to the "
 if ( @files ) {
     say("there are ".@files." file(s) in the pool $releases[-1]:\n",
 	show_a_few(@files));
-    if ( $delete_last ) {
+    if ( $delete_last && ! $force_yes ) {
 	say "you specified on the command line that you want to "
 	    ."delete them.";
     o_really:
