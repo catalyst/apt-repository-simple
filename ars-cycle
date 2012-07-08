@@ -43,7 +43,7 @@ say("Ok, well we found some .debs in the *newest* pool:\n",
     show_a_few(@files));
 
 if (! $force_yes) {
-    if ( prompt_yN("these are ready to become $releases[1]?") ) {
+    if ( not prompt_yN("these are ready to become $releases[1]?") ) {
         say "well, good thing I asked, hey?";
         exit(1);
     }
