@@ -647,6 +647,16 @@ Description: ${\( $desc || $conf_desc || $def_desc )}
 	    rename("dists/$dist/Release.new.asc", "dists/$dist/Release.gpg.new");
 	    $files->insert("dists/$dist/Release.gpg");
 	}
+
+	run(-in => \*STDIN, -out => \*STDOUT,
+	    "gpg", @gpg_options, "--clearsign", "dists/$dist/Release.new");
+
+	if ( ! -s "dists/$dist/Release.new.asc" ) {
+	    moan("gpg sign failed; rc=$?");
+	} else {
+	    rename("dists/$dist/Release.new.asc", "dists/$dist/InRelease.new");
+	    $files->insert("dists/$dist/InRelease");
+	}
     }
     for my $file ($files->members, "dists/$dist/Release") {
 	rename("$file.new", $file) or barf("rename($file.new, $file) failed; $!");
