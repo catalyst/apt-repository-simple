@@ -24,8 +24,8 @@ getopt getconf("path|p=s" => \$path,
 ( -d $path ) or abort "repository path $path does not exist!";
 
 say("You specified your upgrade cycle is (newest to oldest):\n\n",
-    join(" => ", @releases), "\n",
-    "\nSo, now you're going to turn this wheel one notch.\n\n",
+    join(" => ", @releases), "\n");
+mutter("\nSo, now you're going to turn this wheel one notch.\n\n",
     "First, let's check that this seems reasonable.\n");
 
 my $newest = $releases[0];
@@ -36,10 +36,10 @@ if (! @files) {
   exit(0);
 }
 
-say("You selected to force yes to all questions, hold onto your seat,\nthis could be bumpy ride!")
+say("You've selected to force yes to all questions!")
   if $force_yes;
 
-say("Ok, well we found some .debs in the *newest* pool:\n",
+mutter("Ok, well we found some .debs in the *newest* pool:\n",
     show_a_few(@files));
 
 if (! $force_yes) {
@@ -49,14 +49,16 @@ if (! $force_yes) {
     }
 }
 
-say("Ok, so then there's the small matter of what happens to the "
+mutter("Ok, so then there's the small matter of what happens to the "
     ."oldest pool.");
 
 @files = files_in_pool($path, $releases[-1], 0);
 
 if ( @files ) {
-    say("there are ".@files." file(s) in the pool $releases[-1]:\n",
-	show_a_few(@files));
+    if ( ($delete_last && ! $force_yes) || $VERBOSE || !$delete_last ) {
+        say("there are ".@files." file(s) in the pool $releases[-1]:\n",
+	    show_a_few(@files));
+    }
     if ( $delete_last && ! $force_yes ) {
 	say "you specified on the command line that you want to "
 	    ."delete them.";
@@ -105,7 +107,7 @@ if ( @files ) {
     }
 }
 
-say "right-o, let's get on with it, then.";
+mutter "right-o, let's get on with it, then.";
 
 my $pattern = "(" . join("|", map { "\Q$_\E" } @releases) . ")";
 
@@ -125,7 +127,7 @@ if ( @toast_dirs ) {
 	$empty = "(empty) ";
     }
     for my $dir ( @toast_dirs ) {
-	say "DELETING $empty$path/pool/$dir";
+	mutter "DELETING $empty$path/pool/$dir";
 	run("rm", "-rf", "$path/pool/$dir");
     }
 }

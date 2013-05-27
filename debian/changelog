@@ -1,3 +1,10 @@
+apt-repository-simple (0.29) unstable; urgency=low
+
+  * Reduce the verbosity in normal mode. You now need to say -v to more
+    output.
+
+ -- Andrew Ruthven <puck@catalyst.net.nz>  Mon, 27 May 2013 15:52:11 +1200
+
 apt-repository-simple (0.28) unstable; urgency=low
 
   * Teach ars-update how to create InRelease files.
