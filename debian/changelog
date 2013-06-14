@@ -8,7 +8,8 @@ apt-repository-simple (0.29) unstable; urgency=low
 apt-repository-simple (0.28) unstable; urgency=low
 
   * Teach ars-update how to create InRelease files.
-
+  * Fix a regression in a prompt test where answering "y" to are you sure
+    made the script treat the response as a negative and then bomb out.
  -- Andrew Ruthven <puck@catalyst.net.nz>  Tue, 20 Nov 2012 13:04:52 +1300
 
 apt-repository-simple (0.27) unstable; urgency=low
