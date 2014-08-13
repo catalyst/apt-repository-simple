@@ -1,3 +1,10 @@
+apt-repository-simple (0.30) unstable; urgency=low
+
+  * Remove dependency on Digest::SHA1 (and libdigest-sha1-perl) as it
+    is not packaged in modern debian
+
+ -- Haydn Newport <haydn@catalyst.net.nz>  Thu, 14 Aug 2014 10:47:46 +1200
+
 apt-repository-simple (0.29) unstable; urgency=low
 
   * Reduce the verbosity in normal mode. You now need to say -v to more
