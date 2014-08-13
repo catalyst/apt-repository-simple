@@ -11,7 +11,7 @@ use File::Find qw(find);
 use Set::Object 1.15, qw(set);
 use List::Util qw(max);
 use Digest::MD5;
-use Digest::SHA1;
+use Digest::SHA;
 BEGIN{
   eval {
     require Digest::SHA;
@@ -944,7 +944,7 @@ package Digest::All;
 sub new {
   my $sha256 = eval { Digest::SHA->new(256) };
   return bless { MD5 => Digest::MD5->new(),
-                 SHA1 => Digest::SHA1->new(),
+                 SHA1 => Digest::SHA->new(1),
                  ($sha256 ? (SHA256 => $sha256) : () ),
                  length => 0,
          }, shift;
