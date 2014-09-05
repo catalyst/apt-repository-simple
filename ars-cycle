@@ -119,6 +119,10 @@ my $oldest = pop @releases;
 
 my @toast_dirs = grep m{^\Q$oldest\E-}, @ents;
 
+my $mode = (stat("$path/podol/$ents[0]"))[2] & 07777;
+die "Sorry, I can't find the permissions for $ents[0]\n"
+    unless defined $mode && $mode ne '0';
+
 if ( @toast_dirs ) {
     my $empty = "";
     if ( !$delete_last ) {
@@ -146,6 +150,7 @@ while ( my $next_oldest = pop @releases ) {
 	if ( !@releases ) {
 	    # last time through, re-set up the pool dirs
 	    mkdir("$path/pool/$rename");
+            chmod $mode, "$path/pool/$rename";
 	}
     }
 
